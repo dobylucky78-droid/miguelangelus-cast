@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>MiguelAngelus Cast — Arcanjo Miguel transmitindo</title>
+  <!-- Mesmo anjinho do MiguelAngelus; no Cast: fundo vinho ("ao vivo"), ondas de transmissão e uma câmera no lugar da Bíblia -->
+  <defs>
+    <linearGradient id="ceu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8e2a36"/>
+      <stop offset="1" stop-color="#2c0c14"/>
+    </linearGradient>
+    <radialGradient id="brilho" cx="0.5" cy="0.36" r="0.5">
+      <stop offset="0" stop-color="#fff0d6" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#fff0d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="asa" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ffe3e3"/>
+    </linearGradient>
+    <linearGradient id="capa" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2b632"/>
+      <stop offset="1" stop-color="#c58a12"/>
+    </linearGradient>
+    <linearGradient id="tunica" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4f95ec"/>
+      <stop offset="1" stop-color="#2d6cc4"/>
+    </linearGradient>
+    <linearGradient id="corpo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4357"/>
+      <stop offset="1" stop-color="#1e2433"/>
+    </linearGradient>
+    <clipPath id="moldura"><rect width="512" height="512" rx="112"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#moldura)">
+    <rect width="512" height="512" fill="url(#ceu)"/>
+    <circle cx="256" cy="200" r="230" fill="url(#brilho)"/>
+
+    <!-- ondas de transmissão -->
+    <g fill="none" stroke="#ffd95a" stroke-width="12" stroke-linecap="round">
+      <path d="M96 84 A80 80 0 0 0 96 196" opacity=".9"/>
+      <path d="M62 56 A120 120 0 0 0 62 224" opacity=".55"/>
+      <path d="M416 84 A80 80 0 0 1 416 196" opacity=".9"/>
+      <path d="M450 56 A120 120 0 0 1 450 224" opacity=".55"/>
+    </g>
+
+    <!-- asas -->
+    <g stroke="#f0b9b9" stroke-width="5" stroke-linejoin="round" fill="url(#asa)">
+      <path d="M206 262 C150 214 92 212 52 250 C66 258 76 268 80 280 C62 290 54 304 54 320 C78 312 96 314 108 324 C98 340 98 356 104 370 C128 350 150 340 176 338 C188 316 200 292 212 276 Z"/>
+      <path d="M306 262 C362 214 420 212 460 250 C446 258 436 268 432 280 C450 290 458 304 458 320 C434 312 416 314 404 324 C414 340 414 356 408 370 C384 350 362 340 336 338 C324 316 312 292 300 276 Z"/>
+    </g>
+    <g stroke="#f0b9b9" stroke-width="4" stroke-linecap="round" fill="none">
+      <path d="M90 262 C124 266 156 280 186 300"/>
+      <path d="M92 306 C124 306 152 316 180 328"/>
+      <path d="M422 262 C388 266 356 280 326 300"/>
+      <path d="M420 306 C388 306 360 316 332 328"/>
+    </g>
+
+    <!-- capa dourada e túnica -->
+    <path d="M188 250 L128 530 L384 530 L324 250 Z" fill="url(#capa)"/>
+    <path d="M200 252 Q256 232 312 252 L352 530 L160 530 Z" fill="url(#tunica)"/>
+    <path d="M226 246 Q256 272 286 246" fill="none" stroke="#ffd95a" stroke-width="7" stroke-linecap="round"/>
+    <rect x="178" y="410" width="156" height="18" rx="6" fill="#f2b632"/>
+
+    <!-- braços -->
+    <path d="M204 262 C178 290 172 330 190 356" fill="none" stroke="#2d6cc4" stroke-width="30" stroke-linecap="round"/>
+    <path d="M308 262 C334 290 340 324 324 348" fill="none" stroke="#2d6cc4" stroke-width="30" stroke-linecap="round"/>
+
+    <!-- câmera (no lugar da Bíblia) -->
+    <g transform="rotate(-5 256 342)">
+      <rect x="236" y="276" width="40" height="18" rx="5" fill="#2a3142"/>
+      <rect x="186" y="290" width="140" height="104" rx="18" fill="url(#corpo)"/>
+      <circle cx="256" cy="342" r="38" fill="#11151f"/>
+      <circle cx="256" cy="342" r="28" fill="#23508f"/>
+      <circle cx="256" cy="342" r="16" fill="#0e1f40"/>
+      <circle cx="248" cy="333" r="7" fill="#cfe2ff" opacity=".85"/>
+      <circle cx="306" cy="306" r="8" fill="#ff3b30"/>
+      <circle cx="306" cy="306" r="3" fill="#ffd0cc"/>
+    </g>
+
+    <!-- mãos -->
+    <circle cx="192" cy="352" r="16" fill="#f6c9a0"/>
+    <circle cx="324" cy="340" r="16" fill="#f6c9a0"/>
+
+    <!-- cabeça -->
+    <rect x="240" y="226" width="32" height="28" rx="10" fill="#e9b88c"/>
+    <circle cx="256" cy="186" r="60" fill="#f6c9a0"/>
+    <circle cx="197" cy="194" r="11" fill="#f0bd92"/>
+    <circle cx="315" cy="194" r="11" fill="#f0bd92"/>
+    <path d="M196 188 C188 146 214 118 256 118 C298 118 324 146 316 188 C308 172 298 162 286 158 C280 170 262 172 250 162 C240 172 222 172 214 160 C204 166 198 176 196 188 Z" fill="#8a5a2b"/>
+    <g fill="#8a5a2b">
+      <circle cx="206" cy="150" r="16"/><circle cx="230" cy="130" r="18"/><circle cx="258" cy="122" r="18"/>
+      <circle cx="286" cy="130" r="18"/><circle cx="306" cy="150" r="16"/>
+    </g>
+    <ellipse cx="234" cy="194" rx="8" ry="10" fill="#2b1d16"/>
+    <ellipse cx="278" cy="194" rx="8" ry="10" fill="#2b1d16"/>
+    <circle cx="237" cy="190" r="3" fill="#fff"/>
+    <circle cx="281" cy="190" r="3" fill="#fff"/>
+    <circle cx="218" cy="214" r="10" fill="#f28b8b" opacity=".45"/>
+    <circle cx="294" cy="214" r="10" fill="#f28b8b" opacity=".45"/>
+    <path d="M238 220 Q256 238 274 220" fill="none" stroke="#7a3b2e" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- auréola -->
+    <ellipse cx="256" cy="96" rx="66" ry="17" fill="none" stroke="#ffd95a" stroke-width="12"/>
+    <ellipse cx="256" cy="96" rx="66" ry="17" fill="none" stroke="#fff3b8" stroke-width="3" opacity=".8"/>
+
+    <!-- selo "ao vivo" -->
+    <circle cx="428" cy="430" r="40" fill="#ffffff"/>
+    <circle cx="428" cy="430" r="30" fill="none" stroke="#ff3b30" stroke-width="6"/>
+    <circle cx="428" cy="430" r="17" fill="#ff3b30"/>
+  </g>
+</svg>

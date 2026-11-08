@@ -1,0 +1,39 @@
+MiguelAngelus Cast 0.1 — kit de testes
+======================================
+
+Para que serve
+  Testar, na igreja, o rastreio automático da câmera PTZ e GRAVAR OS NÚMEROS do teste (telemetria),
+  para analisar depois em casa. Não transmite nada: o OBS continua fazendo a transmissão.
+
+Antes de usar (no PC do OBS)
+  - Precisa do NDI Runtime (já vem com o NDI Tools / plugin DistroAV do OBS).
+  - Não instala nada: é só copiar esta pasta (pen drive) para o computador e abrir MiguelAngelusCast.exe.
+  - Se o Windows perguntar sobre o Firewall, permita na rede PRIVADA (senão o vídeo NDI pode não chegar).
+  - Faça os testes FORA da Missa.
+
+Passo a passo
+  1. Câmera NDI: escolha a câmera central e clique em "Conectar vídeo".
+     ("Vídeo leve" pede a versão reduzida; se não chegar em 4 s, o programa troca sozinho para a completa.)
+  2. Desmarque "Analisar" por uns 20 s (mede só o custo do vídeo) e marque de novo.
+  3. Cadastrar rosto: só de quem AUTORIZOU. O rosto fica só na memória; some ao fechar ou em "Apagar cadastro".
+     Sem cadastro: clique no rosto na imagem para seguir aquela pessoa.
+  4. Primeiro SEM "Mover a câmera de verdade": o lado direito simula a câmera.
+  5. Ligue "Mover a câmera de verdade" (IP 192.168.100.190, porta 5678).
+     - Comece com velocidade baixa (pan 8, tilt 6). Se balançar, aumente a zona morta ou baixe a velocidade.
+     - "Teste de resposta": a câmera gira um pouco para a direita e volta (mede o atraso). Faça com zoom aberto e com zoom fechado.
+     - PARAR CÂMERA: para tudo na hora.
+     - Se outro programa estiver controlando a câmera (MiguelAngelus, PTZ Controls do OBS), pode não conectar: feche/desligue o outro.
+  6. Andar pelo altar: devagar, rápido, virar de costas, sair e voltar, duas pessoas juntas.
+  7. "Gerar pacote (.zip)": cria o arquivo da sessão para trazer (pen drive) ou mandar por e-mail para
+     contato.miguelangelus@gmail.com.
+
+O que a telemetria grava (pasta "telemetria")
+  quadros.csv  — por quadro analisado: tempos, posição do alvo (em %), comandos, CPU, zoom. SEM imagem e SEM rosto.
+  eventos.txt  — o que aconteceu (conectou, cadastrou, perdeu, testes, ajustes).
+  computador.txt — processador, memória, placa de vídeo, Windows.
+
+Componentes de terceiros
+  - Detector de rostos YuNet (OpenCV Zoo) — licença MIT, ver modelos\LICENSE_yunet.txt
+  - Reconhecimento SFace (OpenCV Zoo) — licença Apache 2.0, ver modelos\LICENSE_sface.txt
+  - ONNX Runtime (Microsoft) — licença MIT
+  - NDI® é marca registrada da Vizrt NDI AB (o runtime não vai junto).

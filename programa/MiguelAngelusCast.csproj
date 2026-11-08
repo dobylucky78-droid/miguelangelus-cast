@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    MiguelAngelus Cast: transmissÃ£o de celebraÃ§Ãµes. CÃ³digo aberto (MIT).
+    v0 = transmissÃ£o (cenas, transiÃ§Ãµes, saÃ­da, som, roteiro). Rastreio da PTZ (pasta Rastreio\): a lÃ³gica do kit em ..\kit-rastreio.
+    .NET 8, publicado "self-contained": nÃ£o precisa instalar o .NET no computador da igreja.
+    Gerar:  dotnet publish -c Release -o "<pasta>"
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>MiguelAngelusCast</AssemblyName>
+    <RootNamespace>MiguelAngelusCast</RootNamespace>
+    <ApplicationIcon>icone.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>0.0.4</Version>
+    <Product>MiguelAngelus Cast</Product>
+    <Description>MiguelAngelus Cast â€” transmissÃ£o de celebraÃ§Ãµes</Description>
+    <Copyright>Copyright (c) 2026 Marcio Aurelio Rios Martins â€” licenÃ§a MIT</Copyright>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <SatelliteResourceLanguages>pt-BR</SatelliteResourceLanguages>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <!-- o pacote do WebView2 traz tambÃ©m a parte de WPF, que nÃ£o usamos -->
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <PackageReference Include="NAudio.Asio" Version="2.2.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- rastreio: detector YuNet (MIT) e reconhecimento SFace (Apache 2.0) com ONNX Runtime (MIT) -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="web\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="modelos\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- FFmpeg LGPL (build "lgpl-shared" do BtbN), processo separado, com a sua LICENSE. NÃ£o vai para o repositÃ³rio. -->
+    <Content Include="ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" Condition="Exists('ffmpeg\ffmpeg.exe')" />
+  </ItemGroup>
+</Project>

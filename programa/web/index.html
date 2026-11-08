@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>MiguelAngelus Cast</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="marca">
+      <div class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffd95a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3z"/></svg></div>
+      <div><b>MiguelAngelus Cast</b><small id="versao">v0</small></div>
+    </div>
+    <nav aria-label="Telas">
+      <button class="navb" data-tela="inicio">Início</button>
+      <button class="navb sel" data-tela="mesa">Ao vivo</button>
+      <button class="navb" data-tela="rastreio">Câmera que segue</button>
+      <button class="navb" data-tela="roteiro">Roteiro</button>
+      <button class="navb" data-tela="ajustes">Ajustes</button>
+    </nav>
+    <div class="espaco"></div>
+    <span class="pill" id="pillGrav" hidden><span class="dot" style="background:var(--vivo)"></span><span>Gravando</span></span>
+    <span class="pill" id="pillSaida"><span class="dot" style="background:var(--su)"></span><span>Fora do ar</span></span>
+    <button id="btnTema" title="Trocar tema claro e escuro">Tema claro</button>
+  </header>
+
+  <main>
+    <!-- ================= AO VIVO ================= -->
+    <section data-tela="mesa">
+      <div class="monitores">
+        <div class="mon">
+          <div class="rot"><span style="color:var(--ac)">Preview</span><span id="nomePv"></span></div>
+          <canvas id="cvPv" width="640" height="360" class="tela pv"></canvas>
+        </div>
+        <div class="meio">
+          <button id="btnTransicao" class="prim grande" title="Espaço ou Enter">TRANSIÇÃO</button>
+          <div id="efeitos" class="efeitos">
+            <button data-ef="corte">Corte</button>
+            <button data-ef="esmaecer">Esmaecer</button>
+            <button data-ef="pagina">Virar página</button>
+          </div>
+          <label class="c2">Duração <b id="durTxt">0,5 s</b><input id="dur" type="range" min="100" max="3000" step="100" value="500"></label>
+        </div>
+        <div class="mon">
+          <div class="rot"><span style="color:var(--vivo)">Programa</span><span id="nomePg"></span></div>
+          <canvas id="cvPg" width="640" height="360" class="tela pg"></canvas>
+        </div>
+      </div>
+
+      <div class="rot" style="margin-top:14px"><span>Cenas</span><span class="dica">clique = preview · duplo clique = direto no programa · teclas 1 a 9 = preview</span></div>
+      <div id="cenas" class="cenas"></div>
+
+      <div id="novaCena" class="pn nova" hidden>
+        <div class="rot"><span>Nova cena</span><button id="btnFecharNova" class="peq">Fechar</button></div>
+        <div class="linha">
+          <label class="c2" style="flex:1 1 200px">Nome<input id="ncNome" placeholder="Ex.: Câmera central"></label>
+          <label class="c2">Imagem
+            <select id="ncTipo">
+              <option value="ndi">Câmera ou telão (NDI)</option>
+              <option value="imagem">Imagem do computador</option>
+              <option value="video">Vídeo do computador</option>
+              <option value="cor">Cor sólida</option>
+              <option value="barras">Barras de teste</option>
+            </select></label>
+          <label class="c2" data-nc="ndi" style="flex:1 1 240px">Fonte NDI
+            <span class="linha"><select id="ncNdi" style="flex:1"></select><button id="btnNdi" class="peq" title="Procurar de novo">↻</button></span></label>
+          <label class="c2" data-nc="imagem" hidden style="flex:1 1 240px">Arquivo
+            <span class="linha"><input id="ncImagem" readonly placeholder="Escolha uma imagem…" style="flex:1"><button id="btnImagem" class="peq">Escolher…</button></span></label>
+          <label class="c2" data-nc="video" hidden style="flex:1 1 240px">Vídeo
+            <span class="linha"><input id="ncVideo" readonly placeholder="Escolha um vídeo…" style="flex:1"><button id="btnVideo" class="peq">Escolher…</button></span></label>
+          <label class="c2" data-nc="cor" hidden>Cor<input id="ncCor" type="color" value="#5a1520"></label>
+          <label class="c2">Ajuste
+            <select id="ncAjuste"><option value="caber">Caber (imagem inteira)</option><option value="preencher">Preencher (cortar as sobras)</option></select></label>
+          <button id="btnCriar" class="prim">Criar cena</button>
+        </div>
+        <div id="ncErro" class="erro"></div>
+      </div>
+
+      <div class="pn rotvivo" id="rotVivo">
+        <div class="rot"><span>Roteiro · <span id="rvPerfil"></span></span><span><button id="rvAnterior" class="peq" title="Momento anterior">◀</button> <button id="rvAbrir" class="peq">Editar no Roteiro</button></span></div>
+        <div id="rvVideo" class="vbar2" hidden><div class="linha" style="align-items:center"><b id="rvVidNome"></b><span id="rvVidTempo" class="dica"></span><span style="flex:1"></span><button id="rvPular" class="peq">Pular vídeo</button></div><div class="pgb"><i id="rvVidPct"></i></div><div id="rvVidDepois" class="dica"></div></div>
+        <div id="rvLista" class="rvlista"></div>
+        <button id="rvProximo" class="prim" style="width:100%;margin-top:8px">Próximo momento</button>
+        <div id="rvAviso" class="dica" style="min-height:18px;margin-top:6px"></div>
+      </div>
+      <div class="pn somvivo">
+        <span class="somnome"><b>Som</b> <span id="somNome" class="dica">—</span></span>
+        <div class="medidor" title="Nível do som que vai para a transmissão"><div class="vu"><i id="vuE"></i><s id="pkE"></s></div><div class="vu"><i id="vuD"></i><s id="pkD"></s></div></div>
+        <span id="somDb" class="dica db">—</span>
+        <span id="somNiv" class="dica"></span>
+        <span id="somAviso" class="erro" style="margin:0"></span>
+        <button id="btnMudo" class="peq" title="Corta o som da transmissão e da gravação">Mudo</button>
+      </div>
+      <div class="pn rtvivo" id="rtVivo" hidden>
+        <b>Câmera que segue</b>
+        <span id="rtVivoTxt" class="dica" style="flex:1"></span>
+        <button id="rtVivoParar" class="parar">PARAR CÂMERA</button>
+      </div>
+      <div class="pn saida">
+        <button id="btnGravar" title="Grava o programa num arquivo deste computador">● Gravar</button>
+        <button id="btnAr" class="prim">Iniciar transmissão</button>
+        <div id="destinos" class="destinos"></div>
+        <span id="saidaInfo" class="dica"></span>
+      </div>
+      <div id="avisoSaida" class="erro"></div>
+      <div class="rodape">
+        <span id="numeros">—</span>
+        <span class="dica">Destinos, chaves e qualidade: Ajustes › Transmissão</span>
+      </div>
+    </section>
+
+    <!-- ================= OUTRAS TELAS (próximas etapas) ================= -->
+    <section data-tela="inicio" hidden>
+      <div class="ingrade">
+        <div class="pn inprox">
+          <div style="flex:999 1 420px;min-width:0">
+            <div class="rot" style="color:var(--ac)"><span>Próxima celebração</span></div>
+            <div class="intit" id="inTitulo"></div>
+            <div style="margin-top:4px"><span class="dot" id="inCorDot" style="border-radius:3px"></span> <span id="inCelebracao"></span> <span class="dica" id="inQuando"></span></div>
+            <div class="dica" style="margin-top:8px"><span id="inCelebrante"></span> · data, hora e celebrante em <button class="lnk" id="inIrCapa">Ajustes › Capa da live</button></div>
+          </div>
+          <div style="flex:1 1 180px;text-align:center">
+            <div class="dica">começa em</div>
+            <div class="incont" id="inContagem">—</div>
+            <div class="dica" id="inEsperaInfo"></div>
+          </div>
+        </div>
+        <div class="incols">
+          <div class="pn">
+            <div class="rot"><span>Como transmitir</span></div>
+            <div class="ck">Perfil do roteiro<span class="r"><select id="inPerfil"></select></span></div>
+            <div class="ck">Plataformas<span class="r" id="inDestinos"></span></div>
+            <div class="ck">Título da live<span class="r" id="inTituloLive"></span></div>
+            <div class="ck">Capa<span class="r" style="display:flex;align-items:center;gap:10px"><button class="peq" id="inEditarCapa">Editar padrão</button><span class="capabox" style="width:176px;border-radius:6px;box-shadow:none"><img id="inCapa" alt="Capa da live"></span></span></div>
+            <div class="ck">Tela de espera automática<span class="r" style="display:flex;align-items:center;gap:8px"><input type="number" id="inEsperaMin" min="1" max="120" style="width:64px"> min antes <button class="peq" id="inEspera"></button></span></div>
+            <div class="ck">Gravar no computador<span class="r" id="inGrav"></span></div>
+          </div>
+          <div class="pn">
+            <div class="rot"><span>Antes de ir ao ar</span><span id="inResumo"></span></div>
+            <div id="inCk"><p class="dica">Conferindo…</p></div>
+            <button class="peq" id="inConferir" style="margin-top:8px">↻ Conferir de novo</button>
+          </div>
+        </div>
+        <div class="pn inprep">
+          <div style="flex:999 1 420px;min-width:0">
+            <div class="rot"><span>Depois</span></div>
+            <p class="dica" style="margin:0">As próximas celebrações aparecem aqui quando a Agenda do MiguelAngelus estiver ligada ao Cast (etapa da integração). Por enquanto, a próxima celebração é a da Capa da live.</p>
+          </div>
+          <div style="flex:1 1 260px;display:flex;flex-direction:column;gap:8px">
+            <button class="prim" id="inPreparar" style="padding:16px;font-size:16px">Preparar a celebração</button>
+            <div class="dica" id="inMsg" style="text-align:center">abre o roteiro, leva a câmera para o primeiro momento e põe a Tela de espera no preview</div>
+            <button id="inIrMesa" hidden>Abrir o Ao vivo →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-tela="rastreio" hidden>
+      <div class="rtgrade">
+        <div class="pn">
+          <div class="rot"><span>Câmera do rastreio</span><span class="dica">clique num rosto para seguir essa pessoa</span></div>
+          <img id="rtImg" class="rtimg" alt="Imagem da câmera do rastreio">
+          <div id="rtInfo" class="rtinfo">—</div>
+          <div id="rtErro" class="erro"></div>
+        </div>
+        <div class="pn">
+          <div class="linha">
+            <button id="rtReal" style="flex:1">Mover a câmera de verdade: DESLIGADO</button>
+            <button id="rtParar" class="parar" style="flex:1">PARAR CÂMERA</button>
+          </div>
+          <p class="dica" style="margin:8px 0 14px">Com "Mover a câmera" desligado, o Cast só simula (o retângulo tracejado mostra onde a câmera iria). PARAR CÂMERA para tudo na hora e desliga o movimento.</p>
+          <div class="linha" style="margin-bottom:10px">
+            <label class="c2" style="flex:1 1 240px">Câmera (de Ajustes › Câmeras)<select id="rtCamera"></select></label>
+            <button id="rtUsarCamera" class="peq prim">Usar esta câmera</button>
+          </div>
+          <div class="linha">
+            <label class="c2" style="flex:1 1 240px">Câmera NDI<select id="rtFonte"></select></label>
+            <button id="rtAtualizar" class="peq" title="Procurar câmeras de novo">↻</button>
+            <label class="chk"><input type="checkbox" id="rtLeve" checked> Vídeo leve</label>
+            <button id="rtConectar" class="peq prim">Conectar</button>
+          </div>
+          <div class="linha" style="margin-top:12px">
+            <button id="rtCadastrar">Cadastrar rosto</button>
+            <button id="rtApagar">Apagar cadastro</button>
+            <label class="chk"><input type="checkbox" id="rtSeguir" checked> Seguir</label>
+            <label class="chk"><input type="checkbox" id="rtAnalisar" checked> Analisar</label>
+          </div>
+          <p class="dica">Cadastro só de quem AUTORIZAR. O rosto fica só na memória do Cast e some ao fechar ou em "Apagar cadastro"; nenhuma imagem é gravada.</p>
+          <details class="ptz-cx" id="rtGuardados" style="margin-top:10px">
+            <summary>Cadastros guardados <span class="dica">— o celebrante não precisa cadastrar toda Missa</span></summary>
+            <div id="rtPessoasLista" style="margin:8px 0"></div>
+            <div class="linha">
+              <label class="c2" style="flex:1 1 180px">Nome<input id="rtPessoaNome" placeholder="Padre …"></label>
+              <label class="c2" style="flex:1 1 140px">Função (opcional)<input id="rtPessoaFuncao" placeholder="pároco, vigário, diácono…"></label>
+              <button id="rtGuardarPessoa" class="peq">Guardar o rosto cadastrado</button>
+            </div>
+            <p class="dica" style="margin:6px 0 0">Só com a concordância da pessoa (o Cast mostra o termo para ela). Guarda só a assinatura do rosto, sem foto, criptografada neste computador; não vai para backup nem internet. "Apagar" remove de vez.</p>
+            <div class="dica" id="rtPessoasMsg" style="min-height:18px;color:var(--ac)"></div>
+          </details>
+          <div class="linha" style="margin-top:12px">
+            <label class="c2">IP da câmera<input id="rtIp" style="width:150px" spellcheck="false"></label>
+            <label class="c2">Porta<input id="rtPorta" type="number" min="1" max="65535" style="width:90px"></label>
+          </div>
+          <div class="linha" style="margin-top:12px">
+            <label class="c2">Vel. pan máx<input id="rtPan" type="number" min="1" max="24" style="width:80px"></label>
+            <label class="c2">Tilt máx<input id="rtTilt" type="number" min="1" max="20" style="width:80px"></label>
+            <label class="c2">Zona morta %<input id="rtZona" type="number" min="2" max="40" style="width:80px"></label>
+            <label class="chk"><input type="checkbox" id="rtInverter"> Câmera de cabeça para baixo</label>
+          </div>
+          <div class="linha" style="margin-top:14px">
+            <button id="rtTeste" class="peq">Teste de resposta</button>
+            <button id="rtPasta" class="peq">Abrir telemetria</button>
+            <button id="rtPacote" class="peq">Gerar pacote (.zip)</button>
+          </div>
+          <p class="dica" id="rtEvento"></p>
+          <p class="dica">Mesma lógica do kit de testes aprovado em 07/11 (21h24). A imagem daqui é uma recepção leve e separada: não muda nada nas cenas nem na transmissão.</p>
+        </div>
+      </div>
+    </section>
+    <section data-tela="roteiro" hidden>
+      <div class="rotgrade">
+        <div class="pn">
+          <div class="rot"><span>Momentos · <span id="roPerfilNome"></span> <span id="roAlterado" style="color:var(--ac);text-transform:none"></span></span>
+            <span class="linha" style="gap:6px"><button id="roMais" class="peq">+ Momento</button><button id="roVideoIni" class="peq tv">+ Vídeo no início</button><button id="roVideoFim" class="peq tv">+ Vídeo no fim</button></span></div>
+          <div class="rohead"><span>#</span><span>Momento</span><span>Tipo</span><span>Cena que vai ao ar</span><span>Câmera e posição</span><span></span></div>
+          <div id="roLista"></div>
+          <p class="dica" style="margin-top:10px"><span class="tp t-sem">sem câmera</span> só a cena · <span class="tp t-fixo">fixo</span> leva a câmera à posição · <span class="tp t-achar">achar</span> vai à posição e centraliza quem está lá · <span class="tp t-seguir">seguir</span> acompanha o rosto cadastrado · <span class="tp t-video">vídeo</span> toca do computador, com som, e pode seguir sozinho ao acabar. Clique no tipo para trocar.</p>
+          <p class="dica">Para a câmera não aparecer andando, o Cast já leva a câmera do próximo momento para a posição enquanto ela não está no ar.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="pn">
+            <div class="rot">Perfis de celebração</div>
+            <div id="roPerfis"></div>
+            <div class="linha" style="margin-top:10px;gap:6px">
+              <button id="roSalvar" class="peq prim">Salvar</button><button id="roNovo" class="peq">Salvar como novo</button><button id="roRenomear" class="peq">Renomear</button>
+              <button id="roExportar" class="peq">Exportar</button><button id="roImportar" class="peq">Importar</button><button id="roApagar" class="peq">Apagar</button>
+            </div>
+            <div id="roMsg" class="dica" style="min-height:18px;margin-top:6px;color:var(--ok)"></div>
+          </div>
+          <button id="roIniciar" class="vivo" style="padding:14px">Iniciar celebração com este perfil</button>
+        </div>
+      </div>
+    </section>
+    <section data-tela="ajustes" hidden>
+     <div class="ajgrade">
+      <nav class="pn ajnav" aria-label="Seções dos ajustes" id="ajNav">
+        <button class="sec" data-sec="aparencia">Aparência</button>
+        <button class="sec" data-sec="cameras">Câmeras</button>
+        <button class="sec sel" data-sec="som">Som</button>
+        <button class="sec" data-sec="transmissao">Transmissão e gravação</button>
+        <button class="sec" data-sec="capa">Capa da live</button>
+        <button class="sec" data-sec="joystick">Joysticks</button>
+        <button class="sec" data-sec="rede">Rede e internet</button>
+        <button class="sec" data-sec="miguel">MiguelAngelus e celulares</button>
+        <button class="sec" data-sec="backup">Backup e sobre</button>
+      </nav>
+      <div class="ajcorpo">
+      <div data-sec="cameras" hidden>
+        <h2 style="margin:0 0 4px">Câmeras</h2>
+        <p class="dica" style="margin:0 0 12px">Cada câmera: o nome, a imagem dela (NDI) e, se for PTZ, o controle por VISCA na rede (o mesmo IP e porta do "PTZ Controls" do OBS). As posições ficam gravadas na própria câmera; as novas vão do nº 20 em diante, sem tocar nas do OBS (0 a 15).</p>
+        <div class="camgrade">
+          <div class="pn camlista">
+            <div class="rot"><span>Câmeras</span></div>
+            <div id="camLista"></div>
+            <button id="btnNovaCam" style="margin-top:6px;width:100%">＋ Câmera</button>
+          </div>
+          <div class="pn" id="camEdit" hidden>
+            <div class="linha">
+              <label class="c2" style="flex:1 1 200px">Nome<input id="camNome" placeholder="Câmera central"></label>
+              <label class="c2" style="flex:1 1 260px">Imagem da câmera (NDI)<span class="linha"><select id="camFonte" style="flex:1"></select><button id="btnCamNdi" class="peq" title="Procurar de novo">↻</button></span></label>
+            </div>
+            <details class="ptz-cx" open>
+              <summary>Controle PTZ <span class="dica">— mover, zoom e posições</span></summary>
+              <div class="linha" style="margin:8px 0">
+                <label class="c2">IP da câmera<input id="camIp" placeholder="192.168.100.190" style="width:150px" spellcheck="false"></label>
+                <label class="c2">Porta<input id="camPorta" type="number" min="1" max="65535" style="width:90px"></label>
+                <label class="c2">Conexão<select id="camProto"><option value="tcp">VISCA TCP</option><option value="visca-ip">VISCA sobre IP (UDP)</option><option value="udp">VISCA UDP simples</option></select></label>
+                <button id="btnCamSalvar" class="prim">Salvar</button>
+                <button id="btnCamApagar" class="peq">Apagar câmera</button>
+              </div>
+              <div id="camPtz" class="ptz-corpo">
+                <div class="ptz-pad" title="Segure para mover; solte para parar">
+                  <span></span><button data-ptzmov="0,-1" aria-label="Para cima">▲</button><span></span>
+                  <button data-ptzmov="-1,0" aria-label="Para a esquerda">◀</button><button data-ptz="home" title="Posição inicial">⌂</button><button data-ptzmov="1,0" aria-label="Para a direita">▶</button>
+                  <span></span><button data-ptzmov="0,1" aria-label="Para baixo">▼</button><span></span>
+                </div>
+                <div class="ptz-zoom">
+                  <button data-ptzzoom="1" title="Aproximar (segure)">＋ Zoom</button><button data-ptzzoom="-1" title="Afastar (segure)">− Zoom</button>
+                  <label class="c2">Velocidade<input type="range" id="camVel" min="0.1" max="1" step="0.1" value="0.5"></label>
+                </div>
+                <div class="ptz-pos">
+                  <div class="rot"><span>Posições prontas <span id="camNPos"></span></span><span class="dica">um clique leva a câmera até lá</span></div>
+                  <div id="camPos" class="ptz-lista-pos"></div>
+                  <div class="linha" style="margin-top:8px">
+                    <button id="btnCamTrazer" class="peq" title="As posições que já estão gravadas na câmera (ex.: pelo OBS) entram na lista, só para chamar">📥 Trazer da câmera</button>
+                    <button id="btnCamGuardar" class="peq prim" title="Grava na câmera a posição em que ela está agora (do nº 20 em diante)">＋ Guardar atual</button>
+                  </div>
+                </div>
+              </div>
+            </details>
+            <div id="camMsg" class="dica" style="min-height:18px;margin-top:6px"></div>
+          </div>
+        </div>
+      </div>
+      <div data-sec="capa" hidden>
+        <h2 style="margin:0 0 4px">Capa da live</h2>
+        <p class="dica" style="margin:0 0 12px">O padrão vale para todas as lives. A cor litúrgica e o nome da celebração saem sozinhos do calendário, pela data. A mesma arte vira a miniatura da live (PNG) e as cenas Tela de espera (com contagem), Abertura e Encerramento.</p>
+        <div class="capagrade">
+          <div class="pn capacfg">
+            <div class="rot"><span>Modelo</span></div>
+            <div class="linha" id="cpModelos"><button data-mod="arco">Arco</button><button data-mod="sangrada">Imagem inteira</button><button data-mod="central">Central</button></div>
+            <div class="rot" style="margin-top:12px"><span>Cor litúrgica</span></div>
+            <div class="dica" id="cpCorInfo" style="margin-bottom:6px"></div>
+            <div class="linha" id="cpCores"></div>
+            <div class="rot" style="margin-top:12px"><span>Próxima celebração</span></div>
+            <label class="c2">Data e hora<input type="datetime-local" id="cpQuando"></label>
+            <label class="c2">Celebração <span class="dica" id="cpCelAuto"></span><input id="cpCelebracao" placeholder="automática pelo calendário"></label>
+            <label class="c2">Celebrante<input id="cpCelebrante" placeholder="Padre …"></label>
+            <div class="rot" style="margin-top:12px"><span>Textos fixos</span></div>
+            <label class="c2">Título<input id="cpTitulo"></label>
+            <label class="c2">Chamada <span class="dica">(modelo Arco)</span><input id="cpChamada"></label>
+            <label class="c2">Linha extra (opcional)<input id="cpExtra" placeholder="Ano Jubilar Arquidiocesano"></label>
+            <label class="c2">Próxima Missa, no Encerramento (opcional)<input id="cpProxima" placeholder="Domingo, 7 de dezembro · 07h00"></label>
+            <div class="rot" style="margin-top:12px"><span>Imagem</span></div>
+            <div class="linha" id="cpImagens"><button data-img="folheto">Ilustração da semana</button><button data-img="foto">Foto da paróquia</button><button data-img="simbolo">Símbolo</button></div>
+            <div class="linha" style="margin-top:6px"><button class="peq" id="cpEscolherImg">Escolher arquivo…</button><span class="dica" id="cpImgNome"></span></div>
+            <div class="dica" id="cpImgInfo" style="margin-top:4px"></div>
+            <div class="rot" style="margin-top:12px"><span>Marcas</span></div>
+            <div class="cpmarca"><button data-marca="marca1"></button><span class="dica"></span><button class="peq" data-escolher="marca1">Escolher…</button></div>
+            <div class="cpmarca"><button data-marca="marca2"></button><span class="dica"></span><button class="peq" data-escolher="marca2">Escolher…</button></div>
+          </div>
+          <div class="capaprev">
+            <div class="linha"><span class="dica" style="flex:1">Prévia · 1920 × 1080</span><span id="cpModos" class="linha"><button data-modo="capa">Capa</button><button data-modo="espera">Tela de espera</button><button data-modo="fim">Encerramento</button></span></div>
+            <div class="capabox"><img id="cpImg" alt="Prévia da capa"></div>
+            <div class="linha"><button class="prim" id="cpExportar">Exportar PNG</button><button id="cpCenas">Criar as cenas no Ao vivo</button><span class="dica" id="cpMsg" style="flex:1"></span></div>
+            <div class="cpinfo">
+              <div class="pn"><b>Também vira cena</b><p class="dica">Tela de espera com contagem regressiva até a hora da celebração; Abertura e Encerramento no mesmo padrão. Mudou aqui, muda na cena.</p></div>
+              <div class="pn"><b>Miniatura da live</b><p class="dica">Exporte o PNG e envie como miniatura no YouTube e imagem no Facebook. A criação automática das lives vem depois, quando as contas da paróquia forem conectadas.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-sec="aparencia" hidden>
+        <h2 style="margin:0 0 4px">Aparência</h2>
+        <p class="dica" style="margin:0 0 12px">Vale só para este computador.</p>
+        <div class="pn">
+          <div class="ck">Tema<span class="r"><button class="peq" data-tema="escuro">Escuro</button><button class="peq" data-tema="claro">Claro</button></span></div>
+          <div class="ck">Botões grandes (bom para usar com pressa ou em tela de toque)<span class="r"><button class="peq" id="apGrandes"></button></span></div>
+          <div class="ck">Tamanho das letras<span class="r"><button class="peq" data-zoom="0.9">Menor</button><button class="peq" data-zoom="1">Normal</button><button class="peq" data-zoom="1.15">Maior</button></span></div>
+        </div>
+      </div>
+      <div data-sec="rede" hidden>
+        <h2 style="margin:0 0 4px">Rede e internet</h2>
+        <p class="dica" style="margin:0 0 12px">As placas de rede deste computador, se as câmeras e a mesa estão na mesma rede, e se a internet alcança as plataformas.</p>
+        <div class="pn"><div class="rot"><span>Placas de rede</span><button class="peq" id="redeAtualizar">↻ Atualizar</button></div><div id="redePlacas"><p class="dica">Procurando…</p></div></div>
+        <div class="pn" style="margin-top:12px"><div class="rot"><span>Câmeras e mesa</span></div><div id="redeEquip"></div></div>
+        <div class="pn" style="margin-top:12px"><div class="rot"><span>Imagens NDI na rede</span></div><div id="redeNdi" class="dica"></div></div>
+        <div class="pn" style="margin-top:12px"><div class="rot"><span>Internet</span><button class="peq" id="redeInternet">Testar agora</button></div><div id="redeNet"><p class="dica">Testa se este computador alcança os servidores de transmissão do YouTube e do Facebook (e quanto demora). A velocidade de envio aparece no Ao vivo, durante a transmissão.</p></div></div>
+      </div>
+      <div data-sec="miguel" hidden>
+        <h2 style="margin:0 0 4px">MiguelAngelus e celulares</h2>
+        <p class="dica" style="margin:0 0 12px">Sem o MiguelAngelus, o Cast funciona sozinho com os próprios ajustes.</p>
+        <div class="pn"><div class="rot"><span>MiguelAngelus na rede</span><button class="peq" id="miAtualizar">↻ Procurar</button></div><div id="miStatus"><p class="dica">Procurando…</p></div></div>
+        <div class="pn" style="margin-top:12px">
+          <div class="rot"><span>O que vem do MiguelAngelus</span></div>
+          <div class="ck">Faixa de letras (NDI)<span class="r">já funciona: crie uma cena com a imagem NDI "MiguelAngelus Letras"</span></div>
+          <div class="ck">Agenda, roteiro do dia e momentos<span class="r">na integração (precisa de mudanças no MiguelAngelus)</span></div>
+          <div class="ck">Pix, nome e brasão da paróquia<span class="r">na integração · por enquanto, na Capa da live</span></div>
+          <div class="ck">Câmeras PTZ e posições<span class="r">na integração · por enquanto, em Ajustes › Câmeras</span></div>
+          <div class="ck">Celulares (os mesmos pareados no MiguelAngelus)<span class="r">na integração</span></div>
+        </div>
+      </div>
+      <div data-sec="backup" hidden>
+        <h2 style="margin:0 0 4px">Backup e sobre</h2>
+        <div class="pn">
+          <div class="rot"><span>Backup dos ajustes</span></div>
+          <p class="dica" style="margin:0 0 8px">Cenas, câmeras e posições, roteiros, capa, som, transmissão e joysticks num arquivo .zip, para guardar ou levar a outro computador. Não vão: as chaves de transmissão, os cadastros de rosto, a ilustração do folheto e os registros.</p>
+          <div class="linha"><button class="prim" id="bkExportar">Salvar backup…</button><button id="bkImportar">Restaurar um backup…</button><span class="dica" id="bkMsg"></span></div>
+        </div>
+        <div class="pn" style="margin-top:12px">
+          <div class="rot"><span>Sobre</span></div>
+          <div class="ck">MiguelAngelus Cast<span class="r" id="soVersao"></span></div>
+          <div class="ck">Licença<span class="r">MIT · programa livre, feito para as paróquias</span></div>
+          <div class="ck">Componentes<span class="r">.NET e WebView2 (Microsoft) · FFmpeg (LGPL, programa à parte) · NDI® runtime · ONNX Runtime · NAudio</span></div>
+          <div class="ck">Pasta de dados<span class="r"><span id="soDados" class="dica"></span><button class="peq" data-pasta="dados">Abrir</button></span></div>
+          <div class="ck">Registro (para achar problemas)<span class="r"><button class="peq" data-pasta="registro">Abrir a pasta</button></span></div>
+        </div>
+      </div>      <div data-sec="joystick" hidden>
+        <h2 style="margin:0 0 4px">🎮 Joysticks</h2>
+        <p class="dica" style="margin:0 0 12px">Até dois controles USB (tipo Xbox, como o GameSir) para mexer nas câmeras PTZ e no Cast. Funcionam mesmo com o Cast minimizado. A configuração vale para este computador.</p>
+        <div class="pn" id="joyPainel"></div>
+      </div>      <div data-sec="em-breve" hidden>
+        <h2 style="margin:0 0 4px" id="ajBreveNome"></h2>
+        <div class="pn breve"><p class="dica" id="ajBreveTxt" style="margin:0">Em construção.</p></div>
+      </div>
+      <div class="pn" data-sec="som" style="margin-bottom:14px">
+        <h2 style="margin:0 0 4px">Som</h2>
+        <p class="dica" style="margin:0 0 12px">De onde vem o som da transmissão. Para mesas com USB (como a Ui24R), prefira o driver ASIO da mesa.</p>
+        <div class="linha">
+          <label class="c2">Mesa de som<select id="smPerfil"></select></label>
+          <label class="c2" style="flex:1 1 320px">Entrada<select id="smDisp"></select></label>
+          <button id="btnSmLista" class="peq" title="Procurar entradas de novo">↻</button>
+          <label class="c2">Canais<select id="smCanais"></select></label>
+        </div>
+        <div class="linha" style="margin-top:12px" id="smRede">
+          <label class="c2">Mesa na rede (endereço IP)<input id="smMesaIp" placeholder="ex.: 192.168.100.201" spellcheck="false" style="width:200px"></label>
+          <button id="btnSmMesa" class="peq">Conectar</button>
+          <span id="smMesaEstado" class="dica"></span>
+        </div>
+        <div class="linha" style="margin-top:12px">
+          <label class="c2" style="flex:0 1 320px">Ganho <b id="smGanhoTxt">0 dB</b><input id="smGanho" type="range" min="-30" max="30" step="1" value="0"></label>
+          <div class="medidor grande-m"><div class="vu"><i id="vuE2"></i><s id="pkE2"></s></div><div class="vu"><i id="vuD2"></i><s id="pkD2"></s></div></div>
+          <span id="smDb2" class="dica db">—</span>
+        </div>
+        <div class="linha" style="margin-top:12px">
+          <label style="display:flex;align-items:center;gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" id="smNivelar"> Nivelar o volume automaticamente</label>
+          <label class="c2" style="flex:0 1 260px">Volume alvo<select id="smAlvo">
+            <option value="-14">−14 LUFS (mais alto, o do YouTube)</option>
+            <option value="-16">−16 LUFS (recomendado)</option>
+            <option value="-18">−18 LUFS (mais baixo)</option>
+            <option value="-23">−23 LUFS (padrão de TV)</option>
+          </select></label>
+          <span id="smNiv" class="dica"></span>
+        </div>
+        <div class="linha" style="margin-top:12px">
+          <label class="c2" style="flex:0 1 420px">Atraso do som <b id="smAtrasoTxt">0 ms</b><input id="smAtraso" type="range" min="0" max="1000" step="10" value="0"></label>
+          <label class="c2" style="flex:0 0 110px">em ms<input id="smAtrasoN" type="number" min="0" max="2000" step="10" style="width:100px"></label>
+          <button id="btnAtrasoMenos" class="peq">−10 ms</button><button id="btnAtrasoMais" class="peq">+10 ms</button>
+        </div>
+        <div class="linha" style="margin-top:12px">
+          <label style="display:flex;align-items:center;gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" id="smAbaixar"> Abaixar o som da mesa quando um vídeo tocar</label>
+          <label class="c2" style="flex:0 1 200px">Quanto abaixa<select id="smAbaixarDb">
+            <option value="-10">−10 dB (pouco)</option><option value="-20">−20 dB (recomendado)</option><option value="-30">−30 dB (bastante)</option><option value="-90">some de todo</option>
+          </select></label>
+          <label class="c2" style="flex:0 1 200px">Volume dos vídeos<select id="smVolVideo">
+            <option value="6">+6 dB</option><option value="3">+3 dB</option><option value="0">normal</option><option value="-3">−3 dB</option><option value="-6">−6 dB</option><option value="-10">−10 dB</option>
+          </select></label>
+        </div>
+        <p class="dica">Quando uma cena de vídeo com som entra no programa, o som do vídeo vai para a transmissão e o da mesa abaixa devagar (0,3 s); quando o vídeo termina ou a cena sai, volta (0,8 s). O vídeo começa do início toda vez que entra no ar e para no último quadro.</p>
+        <p class="dica">As câmeras pela rede chegam alguns décimos de segundo depois do som. Para acertar: grave alguém batendo palmas na frente da câmera e veja se o som vem antes da imagem; aumente o atraso até a palma "bater" junto. Começo sugerido: 200 ms. Pode mudar ao vivo (dá só um leve corte de 10 ms).</p>
+        <p class="dica">O nivelador sobe ou desce o volume devagar até o alvo e fica parado nas pausas. O limitador está sempre ligado: nada passa de −1 dB, então o som não estoura na transmissão. O medidor mostra o que vai para a transmissão.</p>
+        <p id="smAviso" class="dica"></p>
+        <p id="smEstado" class="erro"></p>
+      </div>
+      <div class="pn" data-sec="transmissao" hidden>
+        <h2 style="margin:0 0 4px">Transmissão e gravação</h2>
+        <p class="dica" style="margin:0 0 12px">As chaves ficam criptografadas pelo Windows, só neste computador e nesta conta. Depois de salvas, não aparecem mais (só os 4 últimos caracteres) e não vão para o backup.</p>
+        <div id="ajDestinos"></div>
+        <div class="linha" style="margin-top:14px">
+          <label class="c2">Qualidade do vídeo
+            <select id="ajKbps">
+              <option value="2500">2.500 kbps (internet fraca)</option>
+              <option value="3500">3.500 kbps</option>
+              <option value="4500">4.500 kbps (recomendado 1080p)</option>
+              <option value="6000">6.000 kbps (internet boa)</option>
+            </select></label>
+          <label class="c2">Codificador
+            <select id="ajCod"><option value="auto">Automático</option></select></label>
+          <button id="btnTestarCod" class="peq">Testar codificadores</button>
+          <span id="ajCodInfo" class="dica"></span>
+        </div>
+        <div class="linha" style="margin-top:14px">
+          <label class="c2" style="flex:1 1 360px">Pasta das gravações<input id="ajPasta" readonly></label>
+          <button id="btnPasta" class="peq">Escolher…</button>
+          <button id="btnAbrirPasta" class="peq">Abrir</button>
+        </div>
+        <p class="dica" id="ajFfmpeg"></p>
+      </div>
+      </div>
+     </div>
+    </section>
+  </main>
+</div>
+<script src="app.js"></script>
+  <script src="joystick.js"></script>
+</body>
+</html>
