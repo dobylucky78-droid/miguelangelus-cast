@@ -1,4 +1,4 @@
-/* MiguelAngelus Cast — mesma cara do protótipo aprovado (tema escuro e claro) */
+/* MiguelAngelus Cast â€” mesma cara do protÃ³tipo aprovado (tema escuro e claro) */
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;height:100%}
@@ -7,15 +7,30 @@ html,body{margin:0;height:100%}
 .app.claro{--bg:#f7f3ea;--pn:#fff;--pn2:#efe9dc;--bd:#d9cfba;--tx:#1d2433;--su:#5c574d;--ac:#8a6a12;--onac:#fff;--acx:#f6ecd0;--vivo:#b8322a;--vivox:#fbe7e5;--ok:#2b7a48;--av:#9a6500;--tela:#2b3346}
 button{font:inherit;color:var(--tx);background:var(--pn2);border:1px solid var(--bd);border-radius:10px;padding:8px 12px;cursor:pointer;min-height:40px}
 button:hover{border-color:var(--su)}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-input,select{font:inherit;color:var(--tx);background:var(--pn2);border:1px solid var(--bd);border-radius:10px;padding:7px 9px;min-height:40px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--pn2);border:1px solid var(--bd);border-radius:10px;padding:7px 9px;min-height:40px}
+button:disabled,button:disabled:hover{opacity:.42;cursor:not-allowed;filter:grayscale(.5);box-shadow:none}
 input[type=range]{padding:0;min-height:0;accent-color:var(--ac)}
 input[type=color]{padding:2px;width:60px}
 .peq{min-height:32px;padding:3px 10px}
 .prim{background:var(--ac)!important;border-color:var(--ac)!important;color:var(--onac)!important;font-weight:600}
 header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--bd);background:var(--pn)}
-.marca{display:flex;align-items:center;gap:10px;margin-right:12px}
-.marca small{display:block;font-size:12px;color:var(--su)}
+.marca{display:flex;align-items:center;gap:8px;margin-right:12px;white-space:nowrap}
+.marca small{font-size:11px;color:var(--su);align-self:flex-end;margin-bottom:3px}
+/* mesma marca do MiguelAngelus: Miguel dourado + Angelus; "Cast" vermelho, itÃ¡lico forte, com o ponto de ao vivo */
+.logo-mini{width:32px;height:32px;border-radius:7px;display:block}
+.marca .nome{font-weight:800;font-size:19px;letter-spacing:-.2px;color:#fff}
+.marca .dourado{color:#ffd95a}
+.marca .cast{position:relative;display:inline-block;margin-left:6px;padding-right:9px;color:#e0463c;font-style:italic;font-weight:900;
+  letter-spacing:.3px;transform:skewX(-6deg);text-shadow:0 0 10px rgba(224,70,60,.35)}
+.marca .cast::after{content:"";position:absolute;right:0;top:3px;width:6px;height:6px;border-radius:50%;background:#e0463c;
+  box-shadow:0 0 0 2px rgba(224,70,60,.25);animation:castPulso 2s ease-in-out infinite}
+@keyframes castPulso{50%{box-shadow:0 0 0 4px rgba(224,70,60,0)}}
+@media (prefers-reduced-motion:reduce){.marca .cast::after{animation:none}}
+.app.claro .marca .nome{color:#15181d}
+.app.claro .marca .dourado{color:#b8860b}
+.app.claro .marca .cast{color:#b8322a;text-shadow:none}
+.app.claro .marca .cast::after{background:#b8322a}
 .logo{width:34px;height:34px;border-radius:9px;background:#8e2a36;display:flex;align-items:center;justify-content:center}
 nav{display:flex;gap:6px}
 .navb{background:none!important;border-color:transparent!important;color:var(--su)!important}
@@ -88,14 +103,14 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .chk{display:flex;align-items:center;gap:8px;min-height:40px}
 .chk input{min-height:0;width:18px;height:18px;accent-color:var(--ac)}
 #rtReal.on{background:var(--vivox);border-color:var(--vivo);color:var(--vivo);font-weight:700}
-/* ajustes em seções */
+/* ajustes em seÃ§Ãµes */
 .ajgrade{display:grid;grid-template-columns:220px minmax(0,1fr);gap:14px;align-items:start}
 @media (max-width:900px){.ajgrade{grid-template-columns:1fr}}
 .ajnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:10px}
 .sec{background:none!important;border-color:transparent!important;text-align:left;color:var(--su)!important;width:100%}
 .sec.sel{background:var(--acx)!important;color:var(--ac)!important}
 .ajcorpo>[data-sec]{margin-bottom:14px}
-/* câmeras e PTZ */
+/* cÃ¢meras e PTZ */
 .camgrade{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start}
 @media (max-width:1000px){.camgrade{grid-template-columns:1fr}}
 .mo{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:9px;border:1px solid transparent;width:100%;text-align:left;background:none!important;min-height:36px}
@@ -158,7 +173,7 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .cpinfo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .cpinfo p{margin:4px 0 0}
 
-/* início */
+/* inÃ­cio */
 .ingrade{display:flex;flex-direction:column;gap:14px}
 .inprox{border-color:var(--ac)!important;display:flex;flex-wrap:wrap;gap:16px;align-items:center}
 .intit{font-size:24px;font-weight:700}
@@ -218,7 +233,183 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .joy-linha select{width:100%}
 .toast{position:fixed;right:18px;bottom:18px;z-index:50;background:var(--pn2);color:var(--tx);border:1px solid var(--ac);border-radius:10px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;transform:translateY(8px);transition:opacity .15s,transform .15s;pointer-events:none}
 .toast.vis{opacity:1;transform:none}
-/* aparência: botões grandes */
+/* aparÃªncia: botÃµes grandes */
 .app.grandes button{min-height:44px;font-size:15px}
 .app.grandes .navb{padding:10px 16px}
 [data-sec] .ligado{background:var(--acx)!important;color:var(--ac)!important;border-color:var(--ac)!important}
+
+/* (0.1.0) YouTube: sinal em teste / entrar ao vivo */
+.ytvivo{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 12px}
+.ytvivo .dot{width:10px;height:10px;flex:none}
+
+/* ---------- (0.1.1) tela de abertura, como a do MiguelAngelus ---------- */
+.splash{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:radial-gradient(ellipse at center,#2a1214 0%,#0f1420 75%);transition:opacity .35s ease}
+.splash.saindo{opacity:0;pointer-events:none}
+.splash-cartao{position:relative;width:min(640px,92vw);aspect-ratio:1.6;border-radius:14px;overflow:hidden;
+  background:linear-gradient(135deg,#160809 0%,#3a1012 48%,#9e2a24 100%);box-shadow:0 24px 70px rgba(0,0,0,.6);color:#fff;font-family:"Segoe UI",sans-serif}
+.splash-curva{position:absolute;right:-27%;top:-24%;width:68%;height:150%;border-radius:50%;background:#f7f3ea;
+  box-shadow:-10px 0 0 6px rgba(212,169,58,.85),-22px 0 0 10px rgba(42,18,20,.35)}
+.splash-marca{position:absolute;left:7%;top:10%;width:50%}
+.splash-marca img{width:28%;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
+.splash-nome{font-size:clamp(24px,5.6vw,40px);font-weight:800;letter-spacing:-.5px;margin-top:6px;line-height:1.05;white-space:nowrap}
+.splash-nome b{color:#f0c75e}
+.splash-cast{position:relative;display:table;margin-top:.02em;font-size:1.08em;padding-right:.3em;color:#ff4b3e;font-style:italic;font-weight:900;text-shadow:0 2px 12px rgba(0,0,0,.45)}
+.splash-cast::after{content:"";position:absolute;right:0;top:.12em;width:.2em;height:.2em;border-radius:50%;background:#ff4b3e;box-shadow:0 0 10px #ff4b3e;animation:splashVivo 1.4s infinite ease-in-out}
+@keyframes splashVivo{0%,100%{opacity:1}50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.splash-cast::after{animation:none}}
+.splash-sub{opacity:.85;font-size:clamp(13px,2.4vw,17px);margin-top:2px}
+.splash-info{position:absolute;right:6%;bottom:9%;text-align:right;color:#1d2230;font-size:clamp(11px,2vw,14px);line-height:1.55}
+.splash-gratis{font-size:1.2em;color:#1a7f37;margin-bottom:2px}
+.splash-status{position:absolute;left:7%;bottom:8%;display:flex;align-items:center;gap:9px;font-size:clamp(11px,2vw,14px);opacity:.95;max-width:52%}
+.splash-pontos{display:inline-flex;gap:4px}
+.splash-pontos i{width:6px;height:6px;border-radius:50%;background:#f0c75e;animation:splashPonto 1.1s infinite ease-in-out}
+.splash-pontos i:nth-child(2){animation-delay:.15s}
+.splash-pontos i:nth-child(3){animation-delay:.3s}
+@keyframes splashPonto{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+/* ---------- (0.1.1) Sobre ---------- */
+.marca[role=button]{cursor:pointer;border-radius:8px}
+.marca[role=button]:hover .nome{text-decoration:underline;text-decoration-color:var(--ac);text-underline-offset:4px}
+dialog.sobre{width:min(680px,92vw);max-height:94vh;overflow:auto;background:var(--pn);color:var(--tx);border:1px solid var(--bd);border-radius:14px;padding:20px 24px;box-shadow:0 20px 60px rgba(0,0,0,.55)}
+dialog.sobre::backdrop{background:rgba(0,0,0,.6)}
+dialog.sobre p{margin:0 0 10px}
+.sobre-topo{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.sobre-topo img{width:56px;height:56px;border-radius:12px}
+.sobre-nome{font-size:24px;font-weight:800;letter-spacing:-.3px}
+.sobre-nome .dourado{color:var(--ac)}
+.sobre-nome .cast{color:var(--vivo);font-style:italic;font-weight:900}
+.creditos{display:flex;flex-direction:column;gap:10px;padding:12px 0;margin:4px 0 10px;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)}
+.credito{display:flex;align-items:center;gap:12px}
+.credito>div:last-child{display:flex;flex-direction:column}
+.credito .foto{width:54px;height:54px;object-fit:cover;border:2px solid var(--ac);border-radius:50%;flex:0 0 auto}
+.sobre-brasoes{display:flex;justify-content:center;gap:14px}
+.sobre-brasoes figure{margin:0;flex:0 1 220px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.sobre-brasoes img{height:70px;width:100%;object-fit:contain;background:#fff;border-radius:10px;padding:8px;box-sizing:border-box}
+.sobre-brasoes figcaption{font-size:12px;color:var(--su);text-align:center}
+.sobre-redes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:12px 0 4px}
+.sobre-redes button{border-radius:18px;padding:5px 12px;font-size:13px}
+/* ---------- (0.1.1) 🐢 segredo do Miguel: o Michelangelo atravessa a tela (só a do operador) ---------- */
+.cw-palco{position:fixed;inset:0;z-index:2000;pointer-events:none;overflow:hidden}
+.cw-heroi{position:absolute;bottom:8vh;left:-180px;display:flex;align-items:flex-start;animation:cwCorre 4.6s cubic-bezier(.45,.05,.55,.95) forwards}
+.cw-heroi svg{animation:cwPula .42s ease-in-out infinite alternate;filter:drop-shadow(0 6px 10px rgba(0,0,0,.4))}
+.cw-heroi .cw-braco{transform-origin:90px 66px;animation:cwGira .3s linear infinite}
+.cw-balao{margin-left:-10px;background:#fff;color:#111;font:900 26px/1 "Segoe UI Black","Arial Black",sans-serif;padding:10px 14px;
+  border:3px solid #111;border-radius:16px;transform:rotate(-6deg);box-shadow:4px 4px 0 #f28c28;white-space:nowrap}
+.cw-pizza{position:absolute;top:-40px;font-size:30px;animation:cwCai 2.6s ease-in forwards}
+.cw-recado{position:absolute;left:50%;top:18vh;transform:translateX(-50%);background:rgba(20,22,26,.92);color:#fff;padding:10px 18px;
+  border-radius:12px;font-size:18px;border:2px solid #f28c28;animation:cwSome 5.2s ease forwards;white-space:nowrap}
+.cw-recado b{color:#f0c75e}
+.cw-recado i{color:#ff4b3e;font-weight:900}
+@keyframes cwCorre{to{left:calc(100vw + 40px)}}
+@keyframes cwPula{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-26px) rotate(3deg)}}
+@keyframes cwGira{to{transform:rotate(360deg)}}
+@keyframes cwCai{to{top:105vh;transform:rotate(540deg)}}
+@keyframes cwSome{0%{opacity:0}10%,80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.cw-heroi{animation-duration:.01s;left:40vw}.cw-heroi svg,.cw-heroi .cw-braco,.cw-pizza{animation:none}}
+/* (0.1.2) camadas das cenas e imagens em todas as cenas */
+.cm-palco{position:relative}
+.cm-caixas{position:absolute;inset:3px;overflow:hidden;border-radius:7px;touch-action:none;user-select:none}
+.cm-cx{position:absolute;box-sizing:border-box;border:2px dashed rgba(255,255,255,.75);background:transparent;cursor:move;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.cm-cx.base{border-color:rgba(255,255,255,.35);background:transparent}
+.cm-cx.sel{border:2px solid var(--ac);background:rgba(212,169,58,.07)}
+.cm-cx span{position:absolute;left:4px;top:3px;font-size:11px;line-height:1.2;padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.65);color:#fff;max-width:calc(100% - 12px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.cm-cx i{position:absolute;right:-2px;bottom:-2px;width:14px;height:14px;background:var(--ac);border:2px solid #000;border-radius:3px;cursor:nwse-resize}
+.cm-cx.base i{display:none}
+.cm-topo{align-items:flex-end;gap:12px;margin-bottom:10px}
+.cm-modelos .linha{flex-wrap:wrap;gap:6px}
+.cm-lista{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px}
+.cm-linha{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--pn2)}
+.cm-linha.sel{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac) inset}
+.cm-linha.off .cm-nome{opacity:.55}
+.cm-linha.base{background:transparent;border-style:dashed}
+.cm-nome{display:flex;align-items:center;gap:8px;flex:1 1 200px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cm-nome input{min-height:0;width:18px;height:18px}
+.cm-cantos{display:flex;gap:3px}
+.cm-cantos button,.cm-ord button{min-width:34px;padding:4px 6px}
+.cm-linha select{min-height:34px;padding:4px 8px}
+.cm-op{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--su)}
+.cm-op input{min-height:0;width:90px;padding:0}
+.cm-op b{min-width:36px;font-weight:600;color:var(--tx)}
+.ck2{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.ck2 input{min-height:0;width:17px;height:17px}
+.cm-add{flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+.cm-add select{min-height:34px;max-width:280px}
+.cm-vazio{padding:6px 2px}
+#btnSobrepor{margin-left:8px;min-height:28px;padding:2px 10px;font-size:12px}
+/* (0.1.3) arrastar as cenas para mudar a ordem */
+.cena[data-id]{user-select:none;touch-action:none}
+.cena.arrastando{opacity:.35}
+.cena-fantasma{position:fixed;z-index:60;pointer-events:none;opacity:.92;box-shadow:0 12px 30px rgba(0,0,0,.45);transform:rotate(-1.5deg);background:var(--pn2);border-color:var(--ac)}
+.cena-fantasma .acoes{display:none!important}
+.cena-marca{display:block;position:fixed;z-index:59;width:4px;border-radius:2px;background:var(--ac);box-shadow:0 0 8px var(--ac);pointer-events:none}
+body.arrastando-cena,body.arrastando-cena *{cursor:grabbing!important}
+/* (0.1.4) lista de camadas: arrastar e fundo */
+.cm-alca{cursor:grab;color:var(--su);font-size:16px;padding:0 2px;user-select:none;touch-action:none}
+.cm-linha .cm-nome{cursor:grab}
+.cm-linha .cm-nome input{cursor:pointer}
+.cm-linha.arrastando{opacity:.4}
+.cm-linha.atras{border-left:3px solid var(--su)}
+.cm-linha input[type=color]{min-height:34px;width:46px;padding:2px}
+.cm-marca{width:auto}
+/* (0.1.5) Stream Deck e botões */
+.bt-tab { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+.bt-tab th, .bt-tab td { text-align: left; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.bt-tab td:first-child { font-family: Consolas, monospace; color: #e3c27a; white-space: nowrap; }
+#btExemplo { font-size: 12px; word-break: break-all; }
+#btToast { position: fixed; left: 50%; top: 66px; translate: -50% 0; font: 600 15px "Segoe UI", system-ui, sans-serif; z-index: 9999; padding: 10px 16px; border-radius: 10px;
+  background: #1f2a40; color: #fff; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,.45); border-left: 4px solid #1f9d55;
+  opacity: 0; transform: translateY(10px); transition: opacity .15s, transform .15s; pointer-events: none; }
+#btToast.vis { opacity: 1; transform: none; }
+#btToast.erro { border-left-color: #e0a526; }
+
+/* (0.1.7) menu do botão direito na cena */
+.menu-cena { position: fixed; z-index: 9998; min-width: 210px; padding: 6px; border-radius: 10px; background: #1c2538;
+  border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 30px rgba(0,0,0,.5); font: 14px "Segoe UI", system-ui, sans-serif; }
+.menu-cena .mc-tit { padding: 6px 10px 8px; color: #e3c27a; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.menu-cena button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 6px; background: none; color: #e8ecf3; font: inherit; cursor: pointer; }
+.menu-cena button:hover:not(:disabled) { background: rgba(227,194,122,.16); }
+.menu-cena button:disabled { opacity: .4; cursor: default; }
+.menu-cena .mc-perigo { color: #ff8a8a; }
+.menu-cena hr { border: 0; border-top: 1px solid rgba(255,255,255,.1); margin: 4px 0; }
+.menu-cena .mc-ren { display: flex; gap: 6px; padding: 4px 6px 6px; }
+.menu-cena .mc-ren[hidden] { display: none; }
+.menu-cena .mc-ren input { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: #0f1420; color: #fff; font: inherit; }
+.menu-cena .mc-ren button { width: auto; padding: 6px 12px; background: #c99a2e; color: #111; font-weight: 700; text-align: center; }
+
+/* (0.1.7) som de cada cena */
+.cm-som { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07); }
+.cm-som select { max-width: 360px; }
+.cm-som-lista { margin: 8px 0 4px; display: grid; gap: 6px; }
+.cm-som-linha { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 220px) 56px auto; align-items: center; gap: 10px; }
+.cm-som-linha.off { opacity: .5; }
+.cm-som-db { text-align: right; font-variant-numeric: tabular-nums; }
+#somCena { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+
+/* (0.1.9) roteiro: outras câmeras do momento, seguir o MiguelAngelus, momento preparado */
+.romomento{border-radius:10px}
+.romomento.prep{outline:2px solid var(--ok);outline-offset:1px}
+.rolinha.ro-ou{padding-top:0}
+.rolinha.ro-ou .dica{font-size:11.5px}
+.ro-extra{display:flex;gap:10px;align-items:center;padding:0 4px 6px 34px;flex-wrap:wrap}
+.ro-extra:empty{display:none}
+.ro-extra .peq{min-height:26px;padding:1px 9px;font-size:12px}
+.ro-extra label{display:flex;gap:6px;align-items:center}
+.ro-extra input{min-height:26px;padding:2px 6px;font-size:12.5px;width:260px}
+.ro-mapa{display:flex;flex-direction:column;gap:2px;margin-top:6px;max-height:260px;overflow:auto;font-size:12.5px}
+.ro-mapa>div{display:flex;justify-content:space-between;gap:10px;padding:2px 6px;border-radius:6px}
+.ro-mapa>div.vivo{background:var(--vivox);color:var(--tx)}
+.ro-mapa i{color:var(--su)}
+.mo.prep{border-color:var(--ok)!important}
+.tp.t-prep{background:var(--ok);color:#fff}
+
+/* (0.1.9) miniatura ao vivo em cada cena (backlog 2.1) */
+.cena canvas.mini{display:block;width:100%;aspect-ratio:16/9;height:auto;border-radius:6px;background:#000;margin-bottom:2px}
+.cena.com-mini{padding:6px}
+.cena.com-mini .n{top:10px;right:12px;color:#fff;background:rgba(0,0,0,.55);border-radius:6px;padding:0 5px}
+.cena.com-mini .acoes{bottom:auto;top:10px;left:10px;right:auto}
+/* (0.1.10) câmera desta cena */
+.cm-cam-grade { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; margin-top: 8px; }
+.cm-cam .ptz-pad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
+.cm-cam-acoes { display: flex; flex-direction: column; gap: 6px; }
+.cm-cam-ok { color: #6fcf8e; }
+.cm-cam-erro { color: #ff8a80; }

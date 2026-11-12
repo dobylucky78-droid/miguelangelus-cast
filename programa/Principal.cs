@@ -45,12 +45,14 @@ namespace MiguelAngelusCast
             {
                 if ((saida.AoVivo || saida.Gravando) && MessageBox.Show(this, (saida.AoVivo ? "A transmissão está no ar" : "A gravação está ligada") + ".\n\nEncerrar e fechar o Cast?", "MiguelAngelus Cast", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 { e.Cancel = true; return; }
-                relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose(); Registro.Info("fechou");
+                Controle.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose(); Registro.Info("fechou");
             };
         }
 
         async System.Threading.Tasks.Task Iniciar()
         {
+            // (0.1.1) o NDI começa já, à parte (leva vários segundos); quando fica pronto, procura o MiguelAngelus de novo pela rede
+            Ndi.IniciarAoFundo().ContinueWith(t => { if (t.Result && Miguel.Erro != "") _ = Miguel.Agora(); });
             try
             {
                 var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.PastaDados, "WebView2"));
@@ -79,11 +81,17 @@ namespace MiguelAngelusCast
                 {
                     var (pe, pd, re, rd) = som.Nivel();
                     Enviar(new { tipo = "nivel", pe = Math.Round(pe, 1), pd = Math.Round(pd, 1), re = Math.Round(re, 1), rd = Math.Round(rd, 1), mudo = som.Mudo, estado = som.Estado, nome = NomeSom(), avisoMesa = AvisoMesa(),
-                        niv = som.Cfg.Nivelar, nivGanho = Math.Round(som.Nivel2.GanhoDb, 1), lufs = Math.Round(som.Nivel2.LufsSaida, 1), lim = Math.Round(som.Nivel2.ReducaoLimitadorDb, 1), atraso = som.Cfg.AtrasoMs, abaixado = som.Abaixado });
+                        niv = som.Cfg.Nivelar, nivGanho = Math.Round(som.Nivel2.GanhoDb, 1), lufs = Math.Round(som.Nivel2.LufsSaida, 1), lim = Math.Round(som.Nivel2.ReducaoLimitadorDb, 1), atraso = som.Cfg.AtrasoMs, abaixado = som.Abaixado, cenaSom = som.SomDaCena, cenaMuda = som.CenaMuda });
                 };
                 relogioSom.Start();
                 saida.Mudou += () => Na(() => Enviar(saida.Estado()));
+                saida.Mudou += () => Na(VerYtSaida);   // (0.1.0) sinal em teste no YouTube / encerrar a live
+                // (0.1.7) som de cada cena: o volume de cada fonte acompanha a cena do ar; entradas extras abertas ao fundo
+                mesa.SomMudou += (f, ms) => som.DefinirCena(f, ms);
+                mesa.EntradasDeSomMudaram += () => System.Threading.Tasks.Task.Run(() => { try { som.AtualizarExtras(mesa.EntradasDeSom()); } catch (Exception ex) { Registro.Erro("entradas extras", ex); } });
                 mesa.Iniciar(monitores.Buffer);
+                mesa.AvisarSom();
+                _ = System.Threading.Tasks.Task.Run(() => { try { som.AtualizarExtras(mesa.EntradasDeSom()); } catch (Exception ex) { Registro.Erro("entradas extras", ex); } });
 
                 relogio.Tick += (s, e) => { Enviar(new { tipo = "numeros", qps = Math.Round(mesa.QpsReal, 1), ms = Math.Round(mesa.MsQuadro, 1), atrasos = mesa.Atrasos }); Enviar(saida.Estado()); };
                 relogio.Start();
@@ -91,6 +99,16 @@ namespace MiguelAngelusCast
                 roteiro.Mudou += () => { if (rotPendente) return; rotPendente = true; Na(() => { rotPendente = false; EnviarRoteiro(null); }); };
                 relogioRastreio.Tick += (s, e) => { EnviarRastreio(false); try { roteiro.Tick(); EsperaAutomatica(); } catch (Exception ex) { Registro.Erro("roteiro", ex); } };
                 relogioRastreio.Start();
+                // (0.1.5) botões (Stream Deck / Stream Dock): porta só deste computador
+                Controle.NaTelaFn = f => { var tcs = new System.Threading.Tasks.TaskCompletionSource<object>(); Na(() => { try { tcs.TrySetResult(f()); } catch (Exception ex) { Registro.Erro("botão", ex); tcs.TrySetResult("!erro"); } }); return tcs.Task; };
+                Controle.Executar = Botao;
+                Controle.Estado = EstadoBotoes;
+                Controle.Iniciar();
+                // (0.0.5) agenda do MiguelAngelus: a capa e o Início acompanham as próximas celebrações
+                Miguel.Mudou += () => Na(() => { AplicarAgenda(); EnviarMiguel(); if (!ytOcupado) EnviarYt(); });
+                Miguel.Iniciar();
+                // (0.0.8) lives do canal: relê a cada 5 min (custa 2 de 10.000 unidades da cota diária)
+                ytRelogio = new System.Threading.Timer(_ => Na(() => { if (YouTube.Conectado && !ytOcupado) YtTrabalho(null, async () => { await YouTube.Atualizar(); return null; }); }), null, 4000, 300000);
                 cw.Navigate("https://cast.local/index.html");
             }
             catch (Exception e)
@@ -108,7 +126,300 @@ namespace MiguelAngelusCast
 
         void Enviar(object o) { if (web.CoreWebView2 != null) web.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(o)); }
 
+        // ---------- YouTube (0.0.8) ----------
+        static string TituloLive(CapaCfg c) => $"{c.Titulo} · {Capa.CelebracaoUsada(c)} · {c.Quando:dd/MM} {Capa.Hora(c.Quando)}";
+        static string DescricaoLive(CapaCfg c)
+        {
+            var l = new System.Collections.Generic.List<string> { Capa.CelebracaoUsada(c), Capa.DataLonga(c.Quando) + ", " + Capa.Hora(c.Quando) };
+            if (!string.IsNullOrWhiteSpace(c.Celebrante)) l.Add("Celebrante: " + c.Celebrante.Trim());
+            if (!string.IsNullOrWhiteSpace(Miguel.Paroquia)) l.Add(Miguel.Paroquia);
+            return string.Join("\n", l);
+        }
+        bool ytOcupado; System.Threading.Timer ytRelogio;
+        // (0.1.0) Iniciar transmissão → o sinal chega ao YouTube em TESTE; "Entrar ao vivo" põe no ar; Encerrar termina a live
+        bool ytArAntes; string ytFase = "", ytFaseId; volatile bool ytParar;
+        void YtFase(string f) => Na(() => { ytFase = f; EnviarYt(); });
+        void YtFundo(Func<System.Threading.Tasks.Task<string>> f)
+        {
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                string msg;
+                try { msg = await f(); }
+                catch (Exception e) { msg = "YouTube: " + e.Message; Registro.Info("YouTube: " + e.Message); }
+                try { await YouTube.Atualizar(); } catch { }
+                Na(() => EnviarYt(msg));
+            });
+        }
+        void VerYtSaida()
+        {
+            var ar = saida.AoVivo; if (ar == ytArAntes) return; ytArAntes = ar;
+            var dd = saida.Cfg.Destinos.FirstOrDefault(x => x.Tipo == "youtube");
+            if (!YouTube.Conectado || dd == null || !dd.Ligado) return;
+            if (ar)
+            {
+                var l = YouTube.DaHora(Capa.Cfg.Quando);
+                if (l == null || !l.DoCast) { ytFase = ""; EnviarYt(); return; }
+                ytParar = false; ytFaseId = l.Id; ytFase = "esperando o sinal…"; EnviarYt();
+                Registro.Info("YouTube: sinal para a live " + l.Id);
+                YtFundo(() => YouTube.PorEmTeste(l.Id, YtFase, () => ytParar));
+            }
+            else
+            {
+                ytParar = true; var id = ytFaseId; ytFaseId = null; ytFase = ""; EnviarYt();
+                if (id != null) YtFundo(async () => await YouTube.Encerrar(id) ? "Live encerrada no YouTube." : null);
+            }
+        }
+        void YtTrabalho(string inicio, Func<System.Threading.Tasks.Task<string>> f)
+        {
+            if (ytOcupado) return;
+            ytOcupado = true; EnviarYt(inicio);
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                string msg;
+                try { msg = await f(); }
+                catch (Exception e) { msg = "YouTube: " + e.Message; YouTube.Erro = e.Message; Registro.Info("YouTube: " + e.Message); }
+                Na(() => { ytOcupado = false; EnviarYt(msg); });
+            });
+        }
+        void EnviarYt(string msg = null)
+        {
+            var c = Capa.Cfg; var daHora = YouTube.DaHora(c.Quando);
+            object L(LiveYt x) => x == null ? null : new { id = x.Id, titulo = x.Titulo, inicio = x.Inicio, doCast = x.DoCast, autoInicio = x.AutoInicio, quandoTxt = x.Inicio == default ? "" : Capa.DataLonga(x.Inicio) + ", " + Capa.Hora(x.Inicio), privacidade = x.Privacidade, estado = x.Estado, link = x.Link, studio = x.Studio, miniatura = x.Miniatura };
+            Enviar(new
+            {
+                tipo = "yt", msg, ocupado = ytOcupado, fase = ytFase, aoVivoCast = saida.AoVivo, temCliente = YouTube.TemCliente, conectado = YouTube.Conectado, canal = YouTube.Canal, erro = YouTube.Erro,
+                lives = YouTube.Lives.Select(L).ToList(), daHora = L(daHora), tituloPadrao = TituloLive(c), descricaoPadrao = DescricaoLive(c),
+                privacidade = c.YtPrivacidade, descricao = c.YtDescricao, quandoTxt = Capa.DataLonga(c.Quando) + ", " + Capa.Hora(c.Quando)
+            });
+        }
+
+        // (0.0.5) agenda do MiguelAngelus → capa (data, hora, "Próxima Missa"); ao mudar, o Início e a capa se refazem
+        void AplicarAgenda()
+        {
+            var n = Miguel.Aplicar(Capa.Cfg);
+            if (n == null) return;
+            Capa.Trocar(n, true);
+            Registro.Info("capa pela agenda do MiguelAngelus: " + n.Quando.ToString("dd/MM HH:mm") + (n.Proxima != "" ? " · próxima " + n.Proxima : ""));
+            EnviarInicio();
+        }
+        void EnviarMiguel()
+        {
+            var c = Capa.Cfg;
+            var t = Miguel.Transmitidas(c, DateTime.Now).Take(8).Select(x => new
+            {
+                quando = x.Quando.ToString("yyyy-MM-ddTHH:mm"), quandoTxt = Miguel.TextoProxima(x, true), nome = x.Texto, roteiro = x.TemRoteiro
+            }).ToList();
+            Enviar(new
+            {
+                tipo = "miguel", erro = Miguel.Erro, origem = Miguel.Origem, paroquia = Miguel.Paroquia, total = Miguel.Lista.Count,
+                lido = Miguel.Lido == default ? "" : Miguel.Lido.ToString("HH:mm"), locais = Miguel.Locais.Select(l => new { l.nome, l.sigla }).ToList(),
+                seguir = c.SeguirMiguel, local = c.MiguelLocal, soMissas = c.MiguelSoMissas, folheto = c.MiguelFolheto, marcas = c.MiguelMarcas, proximas = t
+            });
+        }
+
         void Aviso(string erro) { if (erro != null) Enviar(new { tipo = "aviso", texto = erro }); Enviar(saida.Estado()); }
+
+        // ---------- (0.1.5) botões: Stream Deck, Stream Dock, atalhos ----------
+        // Resposta começando com "!" = não fez. Parar gravação e iniciar/encerrar transmissão pedem o botão DUAS vezes (3 s).
+        string btArmado; DateTime btArmadoAte;
+        bool Confirmou(string cmd)
+        {
+            if (btArmado == cmd && DateTime.Now < btArmadoAte) { btArmado = null; return true; }
+            btArmado = cmd; btArmadoAte = DateTime.Now.AddSeconds(3); return false;
+        }
+        void Botao(string cmd, string texto) => Enviar(new { tipo = "botao", cmd, texto });
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+
+        // Tecla "Abrir programa" do Stream Dock: traz o Cast ou o MiguelAngelus para a frente (abre o MiguelAngelus se estiver fechado)
+        string Abrir(string programa)
+        {
+            if (programa == "miguel" || programa == "miguelangelus")
+            {
+                var p = System.Diagnostics.Process.GetProcessesByName("MiguelAngelus").FirstOrDefault(x => x.MainWindowHandle != IntPtr.Zero);
+                if (p != null)
+                {
+                    if (IsIconic(p.MainWindowHandle)) ShowWindow(p.MainWindowHandle, 9);
+                    SetForegroundWindow(p.MainWindowHandle);
+                    return "MiguelAngelus na frente";
+                }
+                var exe = new[] {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "MiguelAngelus", "MiguelAngelus.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "MiguelAngelus", "MiguelAngelus.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "MiguelAngelus", "MiguelAngelus.exe")
+                }.FirstOrDefault(File.Exists);
+                if (exe == null) return "!MiguelAngelus não instalado neste computador";
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) }); return "Abrindo o MiguelAngelus"; }
+                catch (Exception e) { Registro.Erro("abrir MiguelAngelus", e); return "!não consegui abrir o MiguelAngelus"; }
+            }
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+            Show(); TopMost = true; TopMost = false; Activate(); SetForegroundWindow(Handle);
+            return "Cast na frente";
+        }
+
+        string Botao(string cmd, System.Collections.Generic.Dictionary<string, string> q)
+        {
+            string P(string k) => q.TryGetValue(k, out var v) ? v : null;
+            bool Liga(string k) => P(k) is string v && (v == "1" || v == "sim" || v == "true" || v == "ligar");
+            string r;
+            switch (cmd)
+            {
+                case "transicao":
+                case "corte":
+                    {
+                        var pv = mesa.Cfg.Preview;
+                        if (pv == null || pv == mesa.Cfg.Programa) { r = "!o Preview já está no ar"; break; }
+                        if (cmd == "corte") mesa.Corte(); else mesa.Transicao();
+                        r = (cmd == "corte" ? "Corte: " : "Transição: ") + (mesa.AcharCena(pv)?.Nome ?? pv); break;
+                    }
+                case "preview":
+                case "programa":
+                case "direto":
+                    {
+                        var c = mesa.AcharCena(P("cena") ?? P("n") ?? P("nome"));
+                        if (c == null) { r = "!cena não encontrada (use cena=1, 2… ou o nome)"; break; }
+                        if (cmd == "preview") { mesa.PorNoPreview(c.Id); r = "Preview: " + c.Nome; }
+                        else { mesa.Direto(c.Id); r = "No ar: " + c.Nome; }
+                        break;
+                    }
+                case "capa":
+                    {
+                        var modo = (P("modo") ?? "espera").ToLowerInvariant();
+                        modo = modo == "abertura" ? "capa" : modo == "encerramento" ? "fim" : modo;
+                        if (modo != "espera" && modo != "capa" && modo != "fim") { r = "!modo: espera, abertura ou encerramento"; break; }
+                        var id = "capa-" + modo;
+                        var nome = modo == "espera" ? "Tela de espera" : modo == "capa" ? "Abertura" : "Encerramento";
+                        var achada = mesa.Cfg.Cenas.ToList().FirstOrDefault(c => c.Fonte == "capa:" + modo);
+                        if (achada != null) id = achada.Id; else mesa.NovaCena(nome, "capa:" + modo, false, id);
+                        if (Liga("direto")) { mesa.Direto(id); r = "No ar: " + nome; } else { mesa.PorNoPreview(id); r = "Preview: " + nome; }
+                        break;
+                    }
+                case "proximo": roteiro.Proximo(); r = "Roteiro: próximo momento"; break;
+                case "anterior": roteiro.Anterior(); r = "Roteiro: momento anterior"; break;
+                case "mudo":
+                    som.Mudo = P("ligado") != null ? Liga("ligado") : !som.Mudo;
+                    Registro.Info(som.Mudo ? "som mudo (botão)" : "som de volta (botão)");
+                    r = som.Mudo ? "Som MUDO" : "Som de volta"; break;
+                case "gravar":
+                    if (!saida.Gravando) { var e = saida.Gravar(true); Aviso(e); r = e == null ? "Gravando" : "!" + e; }
+                    else if (Confirmou("gravar")) { Aviso(saida.Gravar(false)); r = "Gravação parada"; }
+                    else r = "!Aperte de novo para PARAR a gravação";
+                    break;
+                case "transmitir":
+                    {
+                        bool ligar = !saida.AoVivo;
+                        if (!Confirmou("transmitir")) { r = "!Aperte de novo para " + (ligar ? "INICIAR" : "ENCERRAR") + " a transmissão"; break; }
+                        var e = saida.Transmitir(ligar); Aviso(e);
+                        r = e != null ? "!" + e : ligar ? "Transmissão iniciada" : "Transmissão encerrada"; break;
+                    }
+                case "parar":
+                    if (rastreio == null) { r = "!a câmera que segue não está aberta"; break; }
+                    rastreio.PararCamera(); EnviarRastreio(false); r = "Câmera que segue: PARADA"; break;
+                case "ptz" when P("cena") != null:   // (0.1.10) a câmera vai para a posição salva na cena (a cena não muda)
+                    {
+                        var c = mesa.AcharCena(P("cena"));
+                        if (c == null) { r = "!cena não encontrada (use cena=1, 2… ou o nome)"; break; }
+                        var e = roteiro.IrPosicaoDaCena(c.Id);
+                        r = e == null ? "Câmera → posição da cena " + c.Nome : "!" + e; break;
+                    }
+                case "ptz":
+                    {
+                        var lista = Cameras.Lista.Where(c => !string.IsNullOrWhiteSpace(c.Ip)).ToList();
+                        var qc = P("camera") ?? "1";
+                        var cam = int.TryParse(qc, out var ci) ? (ci >= 1 && ci <= lista.Count ? lista[ci - 1] : null)
+                            : lista.FirstOrDefault(c => c.Id == qc) ?? lista.FirstOrDefault(c => c.Nome.Contains(qc, StringComparison.OrdinalIgnoreCase));
+                        if (cam == null) { r = "!câmera não encontrada (Ajustes › Câmeras)"; break; }
+                        var qp = P("posicao") ?? P("pos") ?? "";
+                        var pos = int.TryParse(qp, out var pn) ? cam.Posicoes.FirstOrDefault(p => p.N == pn) ?? new Posicao { N = pn, Nome = "Posição " + pn }
+                            : cam.Posicoes.FirstOrDefault(p => string.Equals(p.Nome?.Trim(), qp.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (pos == null || pos.N < 0 || pos.N > 127) { r = "!posição não encontrada"; break; }
+                        ViscaRede.Enviar(cam, new byte[] { 0x81, 0x01, 0x04, 0x3F, 0x02, (byte)pos.N, 0xFF })
+                            .ContinueWith(t => { if (t.Result != null) Na(() => Enviar(new { tipo = "camMsg", texto = cam.Nome + ": " + t.Result })); });
+                        r = cam.Nome + " → " + pos.Nome; break;
+                    }
+                case "teste": r = "Botão funcionando ✓"; break;
+                case "abrir": r = Abrir((P("programa") ?? "cast").ToLowerInvariant()); break;   // tecla com o ícone do programa
+                default: r = "!comando desconhecido: " + cmd; break;
+            }
+            Botao(cmd, r);
+            return r;
+        }
+
+        static string PastaBotoes => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MiguelAngelus Cast - botões");
+
+        void EnviarBotoes(string msg) => Enviar(new
+        {
+            tipo = "botoes", porta = Controle.Porta, chave = Controle.Chave, erro = Controle.Erro, msg, pasta = PastaBotoes,
+            exe = Environment.ProcessPath, plugin = Controle.PluginSituacao(),
+            exemplo = Controle.Porta > 0 ? Controle.Url("transicao") : ""
+        });
+
+        // as 15 teclas sugeridas (3 fileiras de 5), na ordem do aparelho; o resto vai para a subpasta "Mais"
+        System.Collections.Generic.List<Controle.Tecla> TeclasPadrao()
+        {
+            Color Az = Color.FromArgb(0x2e, 0x6f, 0xd8), Vd = Color.FromArgb(0x1f, 0x9d, 0x55), Vm = Color.FromArgb(0xd0, 0x2b, 0x2b),
+                  Dr = Color.FromArgb(0xc9, 0x9a, 0x2e), Rx = Color.FromArgb(0x7a, 0x4c, 0xc2), Cz = Color.FromArgb(0x5a, 0x66, 0x78);
+            var l = new System.Collections.Generic.List<Controle.Tecla>();
+            void T(string arq, string rot, string cmd, string extra, Color cor) => l.Add(new Controle.Tecla { Arquivo = arq, Rotulo = rot, Cmd = cmd, Extra = extra, Cor = cor });
+            var cs = mesa.Cfg.Cenas.ToList().Where(c => !(c.Fonte ?? "").StartsWith("capa:")).ToList();
+            string NomeCena(int i) => i < cs.Count ? cs[i].Nome : "Cena " + (i + 1);
+            int NumCena(int i) => i < cs.Count ? mesa.Cfg.Cenas.ToList().IndexOf(cs[i]) + 1 : i + 1;
+            string Curto(string s) => s.Length > 22 ? s.Substring(0, 21) + "…" : s;
+            // fileira 1: quatro cenas no Preview + TRANSIÇÃO
+            for (int i = 0; i < 4; i++) T($"{i + 1:00} Cena {i + 1}", Curto(NomeCena(i)), "preview", "cena=" + NumCena(i), Az);
+            T("05 TRANSIÇÃO", "TRANSIÇÃO", "transicao", null, Vd);
+            // fileira 2: telas da capa + roteiro
+            T("06 Tela de espera", "Tela de\nespera", "capa", "modo=espera", Dr);
+            T("07 Abertura", "Abertura", "capa", "modo=abertura", Dr);
+            T("08 Encerramento", "Encerra-\nmento", "capa", "modo=encerramento", Dr);
+            T("09 Momento anterior", "◀ Momento", "anterior", null, Rx);
+            T("10 Próximo momento", "Momento ▶", "proximo", null, Rx);
+            // fileira 3
+            T("11 CORTE", "CORTE", "corte", null, Vd);
+            T("12 Mudo", "MUDO", "mudo", null, Cz);
+            T("13 Gravar", "GRAVAR\n(2× para)", "gravar", null, Vm);
+            T("14 PARAR câmera que segue", "PARAR\ncâmera", "parar", null, Vm);
+            T("15 Transmitir (2x)", "AO VIVO\n(aperte 2×)", "transmitir", null, Vm);
+            // Mais: todas as cenas no Preview e direto no ar, e as posições das câmeras PTZ
+            var todas = mesa.Cfg.Cenas.ToList();
+            string Limpo(string s) => string.Concat(s.Split(Path.GetInvalidFileNameChars())).Trim();
+            for (int i = 0; i < todas.Count; i++)
+            {
+                T($"Mais\\Cenas no Preview\\{i + 1:00} {Limpo(todas[i].Nome)}", Curto(todas[i].Nome), "preview", "cena=" + (i + 1), Az);
+                T($"Mais\\Cenas direto no ar\\{i + 1:00} {Limpo(todas[i].Nome)}", Curto(todas[i].Nome) + "\nNO AR", "programa", "cena=" + (i + 1), Vm);
+            }
+            var cams = Cameras.Lista.Where(c => !string.IsNullOrWhiteSpace(c.Ip)).ToList();
+            for (int k = 0; k < cams.Count; k++)
+                foreach (var p in cams[k].Posicoes)
+                    T($"Mais\\Posições PTZ\\{Limpo(cams[k].Nome)} - {p.N:00} {Limpo(p.Nome)}", Curto(cams[k].Nome) + "\n" + Curto(p.Nome), "ptz", $"camera={k + 1} posicao={p.N}", Cz);
+            // (0.1.10) posições salvas nas cenas: só a câmera vai (a cena não muda)
+            for (int i = 0; i < todas.Count; i++)
+                if (todas[i].Ptz != null)
+                    T($"Mais\\Posições das cenas\\{i + 1:00} {Limpo(todas[i].Nome)}", Curto(todas[i].Nome) + "\n📷 posição", "ptz", "cena=" + (i + 1), Cz);
+            T("Mais\\Testar botão", "Teste ✓", "teste", null, Cz);
+            return l;
+        }
+
+        object EstadoBotoes()
+        {
+            var cs = mesa.Cfg.Cenas.ToList();
+            var ml = roteiro?.Lista ?? new System.Collections.Generic.List<Momento>(); int ag = roteiro?.Agora ?? -1;
+            string Mom(int i) => i >= 0 && i < ml.Count ? ml[i].Nome : "";
+            return new
+            {
+                versao = Program.Versao,
+                programa = mesa.Cfg.Programa, preview = mesa.Cfg.Preview, efeito = mesa.Cfg.Efeito,
+                aoVivo = saida.AoVivo, gravando = saida.Gravando, mudo = som.Mudo,
+                tempoAr = saida.TempoAr, tempoGrav = saida.TempoGrav,
+                seguindo = rastreio != null,
+                armado = btArmado != null && DateTime.Now < btArmadoAte ? btArmado : "",
+                momento = new { agora = Mom(ag), anterior = Mom(ag - 1), proximo = Mom(ag + 1), n = ag + 1, total = ml.Count },
+                cenas = cs.Select((c, i) => new { n = i + 1, id = c.Id, nome = c.Nome, fonte = c.Fonte, programa = c.Id == mesa.Cfg.Programa, preview = c.Id == mesa.Cfg.Preview }).ToList(),
+                cameras = Cameras.Lista.Where(c => !string.IsNullOrWhiteSpace(c.Ip)).Select((c, i) => new { n = i + 1, nome = c.Nome, posicoes = c.Posicoes.Select(p => new { n = p.N, nome = p.Nome }).ToList() }).ToList()
+            };
+        }
 
         void EnviarSaidaCfg() => Enviar(new
         {
@@ -175,7 +486,14 @@ namespace MiguelAngelusCast
             Enviar(new
             {
                 tipo = "roteiro", perfis = roteiro.Perfis.Select(p => new { id = p.Id, nome = p.Nome, modelo = p.Modelo, n = p.Momentos.Count }),
-                perfil = roteiro.Perfil.Id, lista = roteiro.Lista, alterado = roteiro.Alterado, agora = roteiro.Agora, aviso = roteiro.Aviso, msg
+                perfil = roteiro.Perfil.Id, lista = roteiro.Lista, alterado = roteiro.Alterado, agora = roteiro.Agora, aviso = roteiro.Aviso, msg,
+                // (0.1.9) seguir o telão do MiguelAngelus: situação e como cada item de lá cai num momento daqui
+                seguir = roteiro.Seguir, antes = roteiro.Antes, preparado = roteiro.Preparado, seguirTexto = roteiro.Seguir ? roteiro.SeguirTexto : "",
+                miguel = roteiro.Seguir && Miguel.AoVivo is AoVivoMiguel av ? new
+                {
+                    roteiro = av.Roteiro, vivo = av.VivoIdx,
+                    itens = av.Itens.Select(it => new { txt = AoVivoMiguel.Juntar(it), m = roteiro.Mapear(it) })
+                } : null,
             });
         }
 
@@ -357,7 +675,7 @@ namespace MiguelAngelusCast
             {
                 case "pronto":
                     web.CoreWebView2.PostSharedBufferToScript(monitores, CoreWebView2SharedBufferAccess.ReadOnly,
-                        JsonSerializer.Serialize(new { tipo = "monitores", l = Mesa.ML, a = Mesa.MA }));
+                        JsonSerializer.Serialize(new { tipo = "monitores", l = Mesa.ML, a = Mesa.MA, miniL = Mesa.MiniL, miniA = Mesa.MiniA, miniMax = Mesa.MiniMax }));
                     Enviar(new { tipo = "versao", versao = Program.Versao });
                     mesa.PedirEstado();
                     Enviar(saida.Estado()); EnviarSaidaCfg(); EnviarSomCfg(true);
@@ -386,13 +704,29 @@ namespace MiguelAngelusCast
                 case "rotProximo": roteiro.Proximo(); break;
                 case "rotAnterior": roteiro.Anterior(); break;
                 case "rotIr": roteiro.Ir(Num("i", -1)); break;
+                case "rotSeguir": roteiro.DefinirSeguir(Sim("on")); break;              // (0.1.9)
+                case "miniaturas": mesa.DefinirMiniaturas(Sim("on")); break;            // (0.1.9) backlog 2.1
+                case "rotAntes": roteiro.DefinirAntes(Num("n", 2)); break;
+                case "rotPreparar": roteiro.Preparar(Num("i", -1)); break;
                 case "rotVideo":
                     using (var dlg = new OpenFileDialog { Title = "Vídeo do roteiro", Filter = "Vídeos|*.mp4;*.mov;*.mkv;*.avi;*.wmv;*.webm;*.m4v;*.mpg;*.mpeg;*.ts" })
                         if (dlg.ShowDialog(this) == DialogResult.OK) Enviar(new { tipo = "rotVideoEscolhido", i = Num("i", -1), caminho = dlg.FileName, noFim = Sim("noFim") });
                     break;
                 // ---------- câmeras e PTZ ----------
                 // ---------- rede, backup e sobre ----------
-                case "redePedir": EnviarRede(Sim("internet")); break;
+                case "redePedir": EnviarRede(Sim("internet")); EnviarMiguel(); break;
+                case "miguelPedir": EnviarMiguel(); _ = Miguel.Agora(); break;
+                case "miguelCfg":
+                    {
+                        var c = JsonSerializer.Deserialize<CapaCfg>(JsonSerializer.Serialize(Capa.Cfg));
+                        // só o que veio na mensagem muda
+                        if (m.TryGetProperty("seguir", out _)) c.SeguirMiguel = Sim("seguir");
+                        if (m.TryGetProperty("local", out _)) c.MiguelLocal = Txt("local") ?? "";
+                        if (m.TryGetProperty("soMissas", out _)) c.MiguelSoMissas = Sim("soMissas");
+                        if (m.TryGetProperty("folheto", out _)) c.MiguelFolheto = Sim("folheto");
+                        if (m.TryGetProperty("marcas", out _)) c.MiguelMarcas = Sim("marcas");
+                        Capa.Trocar(c, true); AplicarAgenda(); EnviarMiguel(); EnviarInicio(); break;
+                    }
                 case "sobrePedir":
                     Enviar(new { tipo = "sobre", versao = Program.Versao, dados = Program.PastaDados, programa = Program.Pasta, runtime = Environment.Version.ToString() }); break;
                 case "abrirPastaDados":
@@ -454,6 +788,82 @@ namespace MiguelAngelusCast
                             (c.EsperaAuto ? " Ela entra no ar sozinha às " + Capa.Hora(c.Quando.AddMinutes(-c.EsperaMin)) + "." : " Aperte TRANSIÇÃO para pôr no ar."));
                         break;
                     }
+                // ---------- YouTube (0.0.8) ----------
+                case "ytPedir": EnviarYt(); if (YouTube.Conectado) YtTrabalho(null, async () => { await YouTube.Atualizar(); return null; }); break;
+                case "ytCliente":
+                    {
+                        using var dlg = new OpenFileDialog { Title = "ID do cliente OAuth (o JSON baixado do Google Cloud)", Filter = "JSON do Google|*.json" };
+                        if (dlg.ShowDialog(this) != DialogResult.OK) break;
+                        try { YouTube.DefinirCliente(File.ReadAllText(dlg.FileName)); EnviarYt("ID do cliente guardado (criptografado). Agora clique em Conectar."); }
+                        catch (Exception e) { EnviarYt("Não serviu: " + e.Message); }
+                        break;
+                    }
+                case "ytConectar":
+                    // (0.0.9) o login espera o navegador sem travar as outras consultas ao YouTube
+                    EnviarYt("Abrindo o navegador para entrar na conta do canal… (se fechar o navegador sem entrar, a conexão atual continua valendo)");
+                    System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        string msg;
+                        try { await YouTube.Conectar(); await YouTube.Atualizar(); msg = "Conectado ao canal " + YouTube.Canal + "."; }
+                        catch (OperationCanceledException) { return; }   // substituído por um clique novo em Conectar
+                        catch (Exception e) { msg = "YouTube: " + e.Message; Registro.Info("YouTube: " + e.Message); }
+                        Na(() => EnviarYt(msg));
+                    });
+                    break;
+                case "ytDesconectar": YtTrabalho(null, async () => { await YouTube.Desconectar(); return "Desconectado. O acesso foi retirado da conta Google."; }); break;
+                case "ytCfg":
+                    {
+                        var c = JsonSerializer.Deserialize<CapaCfg>(JsonSerializer.Serialize(Capa.Cfg));
+                        var pv = Txt("privacidade"); if (pv is "public" or "unlisted" or "private") c.YtPrivacidade = pv;
+                        if (Txt("descricao") != null) c.YtDescricao = Txt("descricao");
+                        Capa.Trocar(c, true); break;
+                    }
+                case "ytCriar":
+                    {
+                        var c = Capa.Cfg; var titulo = Txt("titulo"); if (string.IsNullOrWhiteSpace(titulo)) titulo = TituloLive(c);
+                        var desc = string.IsNullOrWhiteSpace(c.YtDescricao) ? DescricaoLive(c) : c.YtDescricao;
+                        var quando = c.Quando; var priv = c.YtPrivacidade;
+                        byte[] jpg = null; try { jpg = Capa.Jpeg("capa", 1280, 720, c); } catch (Exception e) { Registro.Erro("miniatura do YouTube", e); }
+                        YtTrabalho("Criando a live no YouTube…", async () =>
+                        {
+                            var (live, servidor, chave, aviso) = await YouTube.Criar(titulo, desc, quando, priv, jpg);
+                            Na(() =>
+                            {   // o destino YouTube passa a usar a chave do Cast, ligada a esta live
+                                var dd = saida.Cfg.Destinos.FirstOrDefault(x => x.Tipo == "youtube");
+                                if (dd != null && !string.IsNullOrEmpty(chave)) { dd.Servidor = servidor; dd.Ligado = true; Cofre.Gravar("chave:" + dd.Id, chave); saida.Salvar(); EnviarSaidaCfg(); EnviarInicio(); }
+                            });
+                            return aviso ?? "Live criada: \"" + live.Titulo + "\", com a capa de miniatura. Entra no ar sozinha quando você iniciar a transmissão.";
+                        });
+                        break;
+                    }
+                case "ytMiniatura":
+                    {
+                        var id = Txt("id"); if (string.IsNullOrEmpty(id)) break;
+                        byte[] jpg; try { jpg = Capa.Jpeg("capa", 1280, 720); } catch (Exception e) { EnviarYt("Não consegui desenhar a capa: " + e.Message); break; }
+                        YtTrabalho("Enviando a capa…", async () => { await YouTube.EnviarMiniatura(id, jpg); await YouTube.Atualizar(); return "Miniatura trocada pela capa atual."; });
+                        break;
+                    }
+                case "ytAoVivo":
+                    {
+                        var id = Txt("id"); if (string.IsNullOrEmpty(id)) break;
+                        Registro.Info("YouTube: entrar ao vivo " + id);
+                        YtFundo(async () => { await YouTube.EntrarAoVivo(id, YtFase); return "No ar no YouTube."; });
+                        break;
+                    }
+                case "abrirLink":      // (0.1.1) links do Sobre: só os da paróquia e o e-mail de contato
+                    {
+                        var u = Txt("url") ?? "";
+                        if (u == "https://pascom-sjo.github.io/" || u == "mailto:contato.miguelangelus@gmail.com" || u.StartsWith("https://www.youtube.com/@SaoJos"))
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
+                        break;
+                    }
+                case "ytAbrir":
+                    {
+                        var u = Txt("url") ?? "";
+                        if (u.StartsWith("https://www.youtube.com/") || u.StartsWith("https://studio.youtube.com/") || u.StartsWith("https://console.cloud.google.com/"))
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
+                        break;
+                    }
                 // ---------- capa da live ----------
                 case "capaPedir": EnviarCapa(Txt("modo") ?? "capa"); break;
                 case "capaMudar":
@@ -494,9 +904,10 @@ namespace MiguelAngelusCast
                 case "capaExportar":
                     {
                         var modo = Txt("modo") ?? "capa";
-                        using var dlg = new SaveFileDialog { Title = "Exportar a capa", Filter = "PNG|*.png", FileName = "capa_" + Capa.Cfg.Quando.ToString("yyyy-MM-dd_HHmm") + (modo == "capa" ? "" : "_" + modo) + ".png" };
+                        using var dlg = new SaveFileDialog { Title = "Exportar a capa", Filter = "PNG 1920×1080 (Facebook, telão)|*.png|JPEG 1280×720 (miniatura do YouTube, até 2 MB)|*.jpg", FileName = "capa_" + Capa.Cfg.Quando.ToString("yyyy-MM-dd_HHmm") + (modo == "capa" ? "" : "_" + modo) };
                         if (dlg.ShowDialog(this) != DialogResult.OK) break;
-                        try { File.WriteAllBytes(dlg.FileName, Capa.Png(modo)); EnviarCapa(modo, "Salvo: " + Path.GetFileName(dlg.FileName) + " (1920×1080)."); }
+                        var jpg = dlg.FilterIndex == 2 || dlg.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase);
+                        try { File.WriteAllBytes(dlg.FileName, jpg ? Capa.Jpeg(modo) : Capa.Png(modo)); EnviarCapa(modo, "Salvo: " + Path.GetFileName(dlg.FileName) + (jpg ? " (1280×720)." : " (1920×1080).")); }
                         catch (Exception e) { EnviarCapa(modo, "Não consegui salvar: " + e.Message); }
                         break;
                     }
@@ -698,13 +1109,84 @@ namespace MiguelAngelusCast
                         Na(() => Enviar(new { tipo = "codificadores", lista = ok }));
                     });
                     break;
+                case "botoesPedir": EnviarBotoes(null); break;
+                case "botoesTestar": Botao(Txt("cmd") ?? "teste", new System.Collections.Generic.Dictionary<string, string>()); break;
+                case "botoesCriar":
+                    try
+                    {
+                        Controle.CriarAtalhos(PastaBotoes, TeclasPadrao());
+                        System.Diagnostics.Process.Start("explorer.exe", "\"" + PastaBotoes + "\"");
+                        EnviarBotoes("Atalhos e figuras criados em " + PastaBotoes);
+                    }
+                    catch (Exception ex) { Registro.Erro("atalhos dos botões", ex); EnviarBotoes("Não deu para criar os atalhos: " + ex.Message); }
+                    break;
+                case "pluginInstalar":
+                    try { EnviarBotoes(Controle.AtualizarPlugins(true)); }
+                    catch (Exception ex) { Registro.Erro("instalar plugin", ex); EnviarBotoes("Não deu para instalar o plugin: " + ex.Message); }
+                    break;
+                case "botoesPasta":
+                    if (Directory.Exists(PastaBotoes)) System.Diagnostics.Process.Start("explorer.exe", "\"" + PastaBotoes + "\""); else EnviarBotoes("Crie os atalhos primeiro.");
+                    break;
                 case "preview": mesa.PorNoPreview(Txt("id")); break;
                 case "transicao": mesa.Transicao(); break;
                 case "direto": mesa.Direto(Txt("id")); break;
                 case "efeito": mesa.Efeito(Txt("efeito"), Num("ms", 500)); break;
                 case "novaCena": mesa.NovaCena(Txt("nome"), Txt("fonte"), Sim("preencher")); break;
                 case "apagarCena": mesa.ApagarCena(Txt("id")); break;
+                case "duplicarCena": mesa.Duplicar(Txt("id")); break;
+                // (0.1.10) câmera PTZ da cena: posição salva na cena (coordenadas) e rastreio a partir dela
+                case "camCena": mesa.DefinirCamera(Txt("id"), Txt("camera"), Txt("rastreio"), Txt("pessoa")); break;
+                case "camCenaSalvar":
+                    {
+                        var id = Txt("id"); var c = Cameras.Achar(Txt("camera"));
+                        ViscaRede.LerPosicao(c).ContinueWith(t => Na(() =>
+                        {
+                            var (p, erro) = t.Result;
+                            if (p != null) mesa.GravarPtz(id, p);
+                            Enviar(new { tipo = "camCenaMsg", id, texto = p != null ? $"Posição salva na cena ({p.Texto()}). A câmera não guardou nada." : "Não deu para salvar: " + erro + ".", erro = p == null });
+                        }));
+                        break;
+                    }
+                case "camCenaEsquecer": mesa.GravarPtz(Txt("id"), null); break;
+                case "camCenaIr":
+                    {
+                        var e = roteiro.IrPosicaoDaCena(Txt("id"));
+                        Enviar(new { tipo = "camCenaMsg", id = Txt("id"), texto = e == null ? "Câmera indo para a posição salva na cena." : "Não deu: " + e + ".", erro = e != null });
+                        break;
+                    }
+                case "somCena":
+                    {
+                        System.Collections.Generic.List<SomFonte> fs = null;     // null = padrão
+                        if (m.TryGetProperty("fontes", out var fj) && fj.ValueKind == JsonValueKind.Array)
+                            fs = JsonSerializer.Deserialize<System.Collections.Generic.List<SomFonte>>(fj.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        mesa.DefinirSom(Txt("id"), fs);
+                        break;
+                    }
+                case "capturas":       // (0.1.8) monitores e janelas abertas, para a cena "Tela ou janela"
+                    Enviar(new { tipo = "capturas", monitores = FonteCaptura.Monitores(), janelas = FonteCaptura.ListaJanelas() });
+                    break;
+                case "somEntradas":
+                    Enviar(new { tipo = "somEntradas", lista = Som.Dispositivos().Where(d => d.id.StartsWith("wasapi:") || d.id.StartsWith("loop:")).ToList(), abertas = som.EstadoExtras() });
+                    break;
+                case "renomearCena": mesa.Renomear(Txt("id"), Txt("nome")); break;
                 case "mover": mesa.Mover(Txt("id"), Num("delta", 0)); break;
+                case "moverPara": mesa.MoverPara(Txt("id"), Num("pos", 0)); break;
+                case "camadas":
+                case "sobrepor":
+                    {
+                        var opc = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        var ks = m.TryGetProperty("camadas", out var kj) && kj.ValueKind == JsonValueKind.Array ? JsonSerializer.Deserialize<System.Collections.Generic.List<Camada>>(kj.GetRawText(), opc) : new System.Collections.Generic.List<Camada>();
+                        if (Txt("tipo") == "sobrepor") { mesa.DefinirSobrepor(ks, Sim("gravar")); break; }
+                        float[] ret = m.TryGetProperty("ret", out var rj) && rj.ValueKind == JsonValueKind.Array ? rj.EnumerateArray().Select(v => (float)v.GetDouble()).ToArray() : null;
+                        mesa.DefinirCamadas(Txt("id"), Txt("nome"), ret, ks, Sim("semSobrepor"), Sim("gravar"));
+                        break;
+                    }
+                case "escolherImagemCamada":
+                    using (var dlg = new OpenFileDialog { Title = "Imagem para pôr por cima (PNG com fundo transparente fica melhor)", Filter = "Imagens|*.png;*.jpg;*.jpeg;*.bmp" })
+                        if (dlg.ShowDialog(this) == DialogResult.OK)
+                            try { Enviar(new { tipo = "camadaImagem", caminho = Capa.GuardarImagem(dlg.FileName, "camada-" + Path.GetFileNameWithoutExtension(dlg.FileName)), nome = Path.GetFileNameWithoutExtension(dlg.FileName) }); }
+                            catch (Exception ex) { Aviso("Não copiou a imagem: " + ex.Message); }
+                    break;
                 case "fontesNdi":
                     var lista = Ndi.Fontes().Select(f => f.nome).OrderBy(x => x).ToList();
                     Enviar(new { tipo = "fontesNdi", lista, erro = lista.Count == 0 ? Ndi.Erro : null });

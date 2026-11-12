@@ -253,32 +253,105 @@ namespace MiguelAngelusCast.Motor
             int n = quadros * 2;
             bool video = VideoComSom();
             float alvo = video && Cfg.AbaixarComVideo ? (float)Math.Pow(10, Math.Clamp(Cfg.AbaixarDb, -90, 0) / 20) : 1f;
-            if (alvo != 1f || abaixo != 1f)
+            // (0.1.7) volume da mesa pedido pela cena do ar, andando junto com a transição
+            bool mexeMesa = !rMesa.Parada || rMesa.Atual != 1f;
+            if (alvo != 1f || abaixo != 1f || mexeMesa)
             {
-                // desce em ~0,3 s, volta em ~0,8 s (sem degrau)
+                // abaixar com vídeo: desce em ~0,3 s, volta em ~0,8 s (sem degrau)
                 float k = alvo < abaixo ? 1f / (Taxa * 0.3f / 4) : 1f / (Taxa * 0.8f / 4);
                 for (int i = 0; i < n; i += 2)
                 {
                     abaixo += (alvo - abaixo) * k; if (Math.Abs(abaixo - alvo) < 1e-4f) abaixo = alvo;
-                    dst[i] *= abaixo; dst[i + 1] *= abaixo;
+                    float g = abaixo * rMesa.Proximo();
+                    dst[i] *= g; dst[i + 1] *= g;
                 }
             }
+            bool somou = false;
             if (video)
             {
                 if (somVideo.Length < n) somVideo = new float[n];
                 Array.Clear(somVideo, 0, n);
                 float g = (float)Math.Pow(10, Math.Clamp(Cfg.VolumeVideoDb, -30, 12) / 20);
                 foreach (var v in FonteVideo.Ativas.Keys) v.SomarSom(somVideo, quadros, g);
-                if (Mudo) Array.Clear(somVideo, 0, n);
+                if (!Mudo) { for (int i = 0; i < n; i += 2) { float gv = rVideo.Proximo(); dst[i] += somVideo[i] * gv; dst[i + 1] += somVideo[i + 1] * gv; } somou = true; }
+            }
+            // entradas extras da cena (som do computador, microfone USB…)
+            EntradaExtra[] lista; lock (travaExtras) lista = extras.Values.ToArray();
+            foreach (var e in lista)
+            {
+                Rampa r; lock (travaExtras) if (!rExtras.TryGetValue(e.Id, out r)) continue;
+                if (somExtra.Length < n) somExtra = new float[n];
+                e.Ler(somExtra, quadros);
+                if (Mudo || (r.Parada && r.Atual == 0f)) { for (int i = 0; i < n; i += 2) r.Proximo(); continue; }
+                for (int i = 0; i < n; i += 2) { float g = r.Proximo(); dst[i] += somExtra[i] * g; dst[i + 1] += somExtra[i + 1] * g; }
+                somou = true;
+            }
+            if (somou)
                 // soma; acima de −1 dB entra um teto suave (o vídeo já vem masterizado, a mesa já passou pelo limitador)
                 for (int i = 0; i < n; i++)
                 {
-                    float s = dst[i] + somVideo[i], a = Math.Abs(s);
-                    if (a > 0.85f) s = Math.Sign(s) * (0.85f + 0.1f * MathF.Tanh((a - 0.85f) / 0.1f));
-                    dst[i] = s;
+                    float s = dst[i], a = Math.Abs(s);
+                    if (a > 0.85f) dst[i] = Math.Sign(s) * (0.85f + 0.1f * MathF.Tanh((a - 0.85f) / 0.1f));
+                }
+        }
+
+        // ---------- (0.1.7) som de cada cena ----------
+        readonly object travaExtras = new object();
+        readonly Dictionary<string, EntradaExtra> extras = new Dictionary<string, EntradaExtra>();
+        readonly Dictionary<string, Rampa> rExtras = new Dictionary<string, Rampa>();
+        readonly Rampa rMesa = new Rampa(), rVideo = new Rampa();
+        float[] somExtra = new float[0];
+        public string SomDaCena { get; private set; } = "padrão (mesa + vídeos)";
+        public bool CenaMuda { get; private set; }
+
+        static float Lin(double db) => (float)Math.Pow(10, Math.Clamp(db, -60, 12) / 20);
+
+        // a cena do ar mudou (ou a configuração dela): leva cada volume ao alvo em "ms"
+        public void DefinirCena(List<SomFonte> fontes, int ms)
+        {
+            int amostras = Math.Max(1, ms * Taxa / 1000);
+            float mesa = 1, video = 1; var alvos = new Dictionary<string, float>();
+            if (fontes != null)
+            {
+                mesa = 0; video = 0;
+                foreach (var f in fontes.Where(f => f.Ligada))
+                {
+                    var g = Lin(f.VolumeDb);
+                    if (f.Tipo == "mesa") mesa = Math.Max(mesa, g);
+                    else if (f.Tipo == "video") video = Math.Max(video, g);
+                    else if (f.Tipo == "entrada" && !string.IsNullOrEmpty(f.Dispositivo)) alvos[f.Dispositivo] = Math.Max(alvos.TryGetValue(f.Dispositivo, out var x) ? x : 0, g);
                 }
             }
+            lock (travaExtras)
+            {
+                rMesa.Ir(mesa, amostras); rVideo.Ir(video, amostras);
+                foreach (var id in alvos.Keys) if (!rExtras.ContainsKey(id)) rExtras[id] = new Rampa { Atual = 0, Alvo = 0 };
+                foreach (var kv in rExtras) kv.Value.Ir(alvos.TryGetValue(kv.Key, out var g) ? g : 0, amostras);
+            }
+            CenaMuda = mesa == 0 && video == 0 && alvos.Values.All(v => v == 0);
+            SomDaCena = fontes == null ? "padrão (mesa + vídeos)"
+                : CenaMuda ? "esta cena está SEM SOM (transmissão muda)"
+                : string.Join(" + ", fontes.Where(f => f.Ligada).Select(f => f.Tipo == "mesa" ? "mesa" : f.Tipo == "video" ? "vídeos" : (string.IsNullOrEmpty(f.Nome) ? "outra entrada" : f.Nome)));
         }
+
+        // abre as entradas que alguma cena usa e fecha as que ninguém usa mais
+        public void AtualizarExtras(IEnumerable<string> ids)
+        {
+            var quero = new HashSet<string>(ids.Where(i => !string.IsNullOrEmpty(i) && (i.StartsWith("wasapi:") || i.StartsWith("loop:"))));
+            List<EntradaExtra> fechar = new List<EntradaExtra>(); List<string> abrir;
+            lock (travaExtras)
+            {
+                foreach (var id in extras.Keys.Where(k => !quero.Contains(k)).ToList()) { fechar.Add(extras[id]); extras.Remove(id); }
+                abrir = quero.Where(q => !extras.ContainsKey(q)).ToList();
+            }
+            foreach (var e in fechar) e.Dispose();
+            foreach (var id in abrir)
+            {
+                var e = new EntradaExtra(id);
+                lock (travaExtras) { extras[id] = e; if (!rExtras.ContainsKey(id)) rExtras[id] = new Rampa { Atual = 0, Alvo = 0 }; }
+            }
+        }
+        public object EstadoExtras() { lock (travaExtras) return extras.Values.Select(e => new { id = e.Id, nome = e.Nome, estado = e.Estado }).ToList(); }
 
         void LerMesa(float[] dst, int quadros)
         {
@@ -315,6 +388,10 @@ namespace MiguelAngelusCast.Motor
             asio = null; CanaisDispositivo = 0;
         }
 
-        public void Dispose() => Parar();
+        public void Dispose()
+        {
+            Parar();
+            lock (travaExtras) { foreach (var e in extras.Values) e.Dispose(); extras.Clear(); }
+        }
     }
 }

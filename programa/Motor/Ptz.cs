@@ -17,6 +17,21 @@ namespace MiguelAngelusCast.Motor
 {
     public sealed class Posicao { public int N { get; set; } public string Nome { get; set; } = ""; }
 
+    // (0.1.10) posição gravada NA CENA (não na câmera): as coordenadas que a câmera informou na hora do "Salvar posição".
+    // Pan e tilt vão de volta exatamente como vieram (mesmo nº de dígitos), por isso servem para qualquer marca VISCA.
+    public sealed class PtzCena
+    {
+        public string Camera { get; set; } = "";        // id da câmera (Ajustes › Câmeras)
+        public int Pan { get; set; }
+        public int Tilt { get; set; }
+        public int NPan { get; set; } = 4;              // dígitos (nibbles) do pan na resposta da câmera: 4 ou 5
+        public int NTilt { get; set; } = 4;
+        public int Zoom { get; set; } = -1;             // -1 = a câmera não informou o zoom (só move pan/tilt)
+        public string Quando { get; set; } = "";        // quando foi salva (dd/MM HH:mm)
+        public PtzCena Copia() => (PtzCena)MemberwiseClone();
+        public string Texto() => $"pan {Pan:X}, tilt {Tilt:X}" + (Zoom >= 0 ? $", zoom {Zoom:X}" : "");
+    }
+
     public sealed class CameraCfg
     {
         public string Id { get; set; } = "c" + DateTime.Now.Ticks.ToString("x");
@@ -89,7 +104,23 @@ namespace MiguelAngelusCast.Motor
                                 if (!c.ConnectAsync(ip, porta).Wait(1500)) { c.Close(); tcp.Remove(chave); return "a câmera não respondeu (TCP " + porta + ")"; }
                                 tcp[chave] = c;
                                 var s0 = c.GetStream();
-                                Task.Run(() => { var b = new byte[256]; try { while (s0.Read(b, 0, b.Length) > 0) { } } catch { } });   // descarta as respostas
+                                // lê as respostas: as de rotina são descartadas; a de uma pergunta (posição, zoom) vai para quem perguntou
+                                Task.Run(() =>
+                                {
+                                    var b = new byte[256]; var msg = new List<byte>();
+                                    try
+                                    {
+                                        int n;
+                                        while ((n = s0.Read(b, 0, b.Length)) > 0)
+                                            for (int i = 0; i < n; i++)
+                                            {
+                                                msg.Add(b[i]); if (b[i] != 0xFF) continue;
+                                                var m = msg.ToArray(); msg.Clear();
+                                                Resposta(chave, m);
+                                            }
+                                    }
+                                    catch { }
+                                });
                             }
                             try { c.GetStream().Write(cmd, 0, cmd.Length); return null; }
                             catch { c.Close(); tcp.Remove(chave); }   // conexão velha: tenta de novo uma vez
@@ -114,5 +145,97 @@ namespace MiguelAngelusCast.Motor
         });
 
         public static void FecharTudo() { lock (trava) { foreach (var c in tcp.Values) try { c.Close(); } catch { } tcp.Clear(); } }
+
+        // ---------- (0.1.10) perguntar à câmera onde ela está, e mandá-la para coordenadas exatas ----------
+        static readonly Dictionary<string, TaskCompletionSource<byte[]>> esperando = new Dictionary<string, TaskCompletionSource<byte[]>>();
+        static readonly System.Threading.SemaphoreSlim umaPergunta = new System.Threading.SemaphoreSlim(1, 1);
+
+        // resposta que chegou pela conexão TCP: 90 4y FF / 90 5y FF (recebido/feito) são rotina; 90 50 … FF com dados
+        // (ou um erro 90 6y …) é a resposta de uma pergunta
+        static void Resposta(string chave, byte[] m)
+        {
+            if (m.Length < 3 || (m[0] & 0xF0) != 0x90) return;
+            bool dados = m[1] == 0x50 && m.Length > 3, erro = (m[1] & 0xF0) == 0x60;
+            if (!dados && !erro) return;
+            TaskCompletionSource<byte[]> t;
+            lock (esperando) { if (!esperando.TryGetValue(chave, out t)) return; esperando.Remove(chave); }
+            t.TrySetResult(m);
+        }
+
+        // manda uma pergunta VISCA e espera a resposta com dados (null = sem resposta)
+        static async Task<byte[]> Perguntar(CameraCfg c, byte[] cmd)
+        {
+            if (c == null || string.IsNullOrWhiteSpace(c.Ip)) return null;
+            int porta = c.Porta > 0 ? c.Porta : Cameras.PortaPadrao(c.Protocolo);
+            await umaPergunta.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (c.Protocolo == "tcp")
+                {
+                    var chave = c.Ip + ":" + porta;
+                    var t = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    lock (esperando) esperando[chave] = t;
+                    var e = await Enviar(c, cmd).ConfigureAwait(false);
+                    if (e != null) { lock (esperando) esperando.Remove(chave); return null; }
+                    var ok = await Task.WhenAny(t.Task, Task.Delay(1500)).ConfigureAwait(false);
+                    lock (esperando) esperando.Remove(chave);
+                    return ok == t.Task ? t.Task.Result : null;
+                }
+                // UDP: a resposta volta para a mesma porta de onde saiu o pedido
+                var e2 = await Enviar(c, cmd).ConfigureAwait(false);
+                if (e2 != null) return null;
+                var fim = DateTime.Now.AddMilliseconds(1500);
+                while (DateTime.Now < fim)
+                {
+                    var r = udp.ReceiveAsync();
+                    if (await Task.WhenAny(r, Task.Delay(fim - DateTime.Now)).ConfigureAwait(false) != r) return null;
+                    var res = r.Result; if (res.RemoteEndPoint.Address.ToString() != c.Ip) continue;
+                    var d = res.Buffer;
+                    if (c.Protocolo != "udp" && d.Length > 8 && d[0] == 0x01) d = d.Skip(8).ToArray();   // tira o cabeçalho do VISCA sobre IP
+                    if (d.Length < 3 || (d[0] & 0xF0) != 0x90) continue;
+                    if ((d[1] == 0x50 && d.Length > 3) || (d[1] & 0xF0) == 0x60) return d;
+                }
+                return null;
+            }
+            catch (Exception ex) { Registro.Erro("pergunta VISCA", ex); return null; }
+            finally { umaPergunta.Release(); }
+        }
+
+        static int Nibbles(byte[] d, int de, int n) { int v = 0; for (int i = 0; i < n; i++) v = v << 4 | (d[de + i] & 0x0F); return v; }
+
+        // onde a câmera está agora: pan/tilt (8x 09 06 12 FF) e zoom (8x 09 04 47 FF)
+        public static async Task<(PtzCena pos, string erro)> LerPosicao(CameraCfg c)
+        {
+            if (c == null) return (null, "escolha a câmera");
+            if (string.IsNullOrWhiteSpace(c.Ip)) return (null, $"a câmera \"{c.Nome}\" está sem IP (Ajustes › Câmeras)");
+            var pt = await Perguntar(c, new byte[] { 0x81, 0x09, 0x06, 0x12, 0xFF }).ConfigureAwait(false);
+            if (pt == null) return (null, $"a câmera \"{c.Nome}\" não respondeu onde está (sem resposta à pergunta de posição VISCA)");
+            if ((pt[1] & 0xF0) == 0x60) return (null, $"a câmera \"{c.Nome}\" recusou a pergunta de posição (erro VISCA {pt[2]:X2})");
+            int dig = pt.Length - 3;                       // 90 50 [dígitos] FF
+            int np = dig == 8 ? 4 : dig == 9 ? 5 : dig == 10 ? 5 : -1, nt = dig - np;
+            if (np < 0) return (null, $"resposta de posição estranha da câmera ({dig} dígitos)");
+            var p = new PtzCena { Camera = c.Id, NPan = np, NTilt = nt, Pan = Nibbles(pt, 2, np), Tilt = Nibbles(pt, 2 + np, nt), Quando = DateTime.Now.ToString("dd/MM HH:mm") };
+            var z = await Perguntar(c, new byte[] { 0x81, 0x09, 0x04, 0x47, 0xFF }).ConfigureAwait(false);
+            if (z != null && z.Length == 7 && z[1] == 0x50) p.Zoom = Nibbles(z, 2, 4);
+            return (p, null);
+        }
+
+        static byte[] Digitos(int v, int n) { var b = new byte[n]; for (int i = n - 1; i >= 0; i--) { b[i] = (byte)(v & 0x0F); v >>= 4; } return b; }
+
+        // leva a câmera às coordenadas salvas (primeiro o zoom, depois pan/tilt — são comandos de grupos diferentes e andam juntos)
+        public static async Task<string> IrPara(CameraCfg c, PtzCena p, int velPan = 0x18, int velTilt = 0x14)
+        {
+            if (c == null || p == null) return "sem câmera ou sem posição";
+            string e = null;
+            if (p.Zoom >= 0)
+            {
+                var zc = new List<byte> { 0x81, 0x01, 0x04, 0x47 }; zc.AddRange(Digitos(p.Zoom, 4)); zc.Add(0xFF);
+                e = await Enviar(c, zc.ToArray()).ConfigureAwait(false);
+                await Task.Delay(40).ConfigureAwait(false);
+            }
+            var pc = new List<byte> { 0x81, 0x01, 0x06, 0x02, (byte)Math.Clamp(velPan, 1, 0x18), (byte)Math.Clamp(velTilt, 1, 0x14) };
+            pc.AddRange(Digitos(p.Pan, p.NPan)); pc.AddRange(Digitos(p.Tilt, p.NTilt)); pc.Add(0xFF);
+            return await Enviar(c, pc.ToArray()).ConfigureAwait(false) ?? e;
+        }
     }
 }

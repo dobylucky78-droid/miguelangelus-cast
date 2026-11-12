@@ -13,8 +13,10 @@ namespace MiguelAngelusCast
         public static readonly string Versao = typeof(Program).Assembly.GetName().Version.ToString(3);
 
         [STAThread]
-        static void Main()
+        static int Main(string[] args)
         {
+            // (0.1.5) botão do Stream Deck/Stream Dock: manda o comando para o Cast aberto e sai, sem abrir janela
+            if (args.Length > 0 && (args[0] == "/botao" || args[0] == "--botao")) return Motor.Controle.Botao(args);
             Directory.CreateDirectory(PastaDados);
             Registro.Iniciar();
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Registro.Erro("não tratado", e.ExceptionObject as Exception);
@@ -24,6 +26,7 @@ namespace MiguelAngelusCast
             Application.Run(new Principal());
             // com o rastreio aberto, encerra na hora (desmontar NDI e modelos de rosto prendia o kit ao fechar)
             if (Rastreio.Rastreador.Usado) Environment.Exit(0);
+            return 0;
         }
     }
 

@@ -7,10 +7,64 @@
 </head>
 <body>
 <div class="app" id="app">
+  <!-- (0.1.1) tela de abertura: fica enquanto procura o MiguelAngelus na rede (sem ele, 5 segundos) -->
+  <div id="splash" class="splash">
+    <div class="splash-cartao">
+      <div class="splash-curva"></div>
+      <div class="splash-marca">
+        <img src="img/icone.svg" alt="">
+        <div class="splash-nome"><b>Miguel</b>Angelus <span class="splash-cast">Cast</span></div>
+        <div class="splash-sub">Transmissão das celebrações</div>
+      </div>
+      <div class="splash-info">
+        <div class="splash-gratis"><b>Gratuito · programa livre</b></div>
+        <div id="splashVersao">&nbsp;</div>
+        <div>© 2026</div>
+        <div><b>PASCOM</b></div>
+        <div><b>São José Operário Ilha</b></div>
+      </div>
+      <div class="splash-status"><span class="splash-pontos"><i></i><i></i><i></i></span><span id="splashStatus">Procurando o MiguelAngelus na rede…</span></div>
+    </div>
+  </div>
+
+  <!-- (0.1.1) Sobre: abre no logotipo ou no nome do programa -->
+  <dialog id="dlgSobre" class="sobre">
+    <form method="dialog">
+      <div class="sobre-topo"><img src="img/icone.svg" alt=""><div><div class="sobre-nome"><span class="dourado">Miguel</span>Angelus <span class="cast">Cast</span></div>
+        <div class="dica">Transmissão das celebrações · <span id="sobreVersao"></span></div></div></div>
+      <p>O <b>MiguelAngelus Cast</b> nasceu para transmitir as celebrações da <b>Paróquia São José Operário</b>. Depois de mais de mil
+        Missas transmitidas com programas feitos para jogos e lives em geral, a Pascom quis um programa pensado para a <b>liturgia</b>
+        e para quem serve na transmissão.</p>
+      <p>Ele conversa com o <b>MiguelAngelus</b> do telão: recebe a agenda, a ilustração do folheto, o brasão e as letras dos cantos,
+        monta sozinho a capa da live, cria a transmissão no YouTube, acompanha o celebrante com a câmera e junta o som da mesa — para
+        que a equipe cuide da celebração, e não dos botões.</p>
+      <p class="dica"><b>Miguel</b> + <b>Angelus</b>, como o programa do telão, que nasceu primeiro; <b>Cast</b>, de levar a celebração
+        a quem não pode estar na igreja: os doentes, os idosos, quem mora longe.</p>
+      <div class="creditos">
+        <div class="credito"><img class="foto" src="img/foto-miguel.webp" alt="Miguel">
+          <div><span class="dica">Criou o MiguelAngelus</span><b>Miguel Aurelio Dutra Martins</b></div></div>
+        <div class="credito"><img class="foto" src="img/foto-marcio.webp" alt="Marcio">
+          <div><span class="dica">Idealizou e desenvolveu o Cast</span><b>Marcio Aurelio Rios Martins</b></div></div>
+      </div>
+      <div class="sobre-brasoes">
+        <figure><img src="img/brasao-paroquia.webp" alt="Brasão da Paróquia São José Operário"><figcaption>Paróquia São José Operário (RJ)</figcaption></figure>
+        <figure><img src="img/brasao-pascom.webp" alt="Pascom"><figcaption>Pascom São José Operário</figcaption></figure>
+      </div>
+      <div class="sobre-redes">
+        <button type="button" data-link="https://pascom-sjo.github.io/">🌐 pascom-sjo.github.io</button>
+        <button type="button" data-link="https://www.youtube.com/@SaoJos%C3%A9Oper%C3%A1rioIlha">▶ São José Operário Ilha</button>
+        <button type="button" data-link="mailto:contato.miguelangelus@gmail.com">✉ contato.miguelangelus@gmail.com</button>
+      </div>
+      <p class="dica" style="text-align:center;margin:6px 0 0">Programa livre (licença MIT), feito para as paróquias.</p>
+      <div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="prim" value="ok">OK</button></div>
+    </form>
+  </dialog>
+
   <header>
-    <div class="marca">
-      <div class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffd95a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3z"/></svg></div>
-      <div><b>MiguelAngelus Cast</b><small id="versao">v0</small></div>
+    <div class="marca" title="Sobre o MiguelAngelus Cast" role="button" tabindex="0">
+      <img src="img/icone.svg" alt="" class="logo-mini">
+      <span class="nome"><span class="dourado">Miguel</span>Angelus<span class="cast">Cast</span></span>
+      <small id="versao">v0</small>
     </div>
     <nav aria-label="Telas">
       <button class="navb" data-tela="inicio">Início</button>
@@ -31,7 +85,7 @@
       <div class="monitores">
         <div class="mon">
           <div class="rot"><span style="color:var(--ac)">Preview</span><span id="nomePv"></span></div>
-          <canvas id="cvPv" width="640" height="360" class="tela pv"></canvas>
+          <div class="cm-palco"><canvas id="cvPv" width="640" height="360" class="tela pv"></canvas><div id="cmCaixas" class="cm-caixas" hidden></div></div>
         </div>
         <div class="meio">
           <button id="btnTransicao" class="prim grande" title="Espaço ou Enter">TRANSIÇÃO</button>
@@ -48,7 +102,7 @@
         </div>
       </div>
 
-      <div class="rot" style="margin-top:14px"><span>Cenas</span><span class="dica">clique = preview · duplo clique = direto no programa · teclas 1 a 9 = preview</span></div>
+      <div class="rot" style="margin-top:14px"><span>Cenas <button id="btnSobrepor" class="peq" title="Logo, selo AO VIVO… por cima de todas as cenas (menos as da capa)">🖼 Em todas as cenas</button></span><span class="dica">clique = preview · duplo clique = direto no programa · arraste para mudar a ordem · teclas 1 a 9 = preview · ✎ = camadas</span></div>
       <div id="cenas" class="cenas"></div>
 
       <div id="novaCena" class="pn nova" hidden>
@@ -60,6 +114,8 @@
               <option value="ndi">Câmera ou telão (NDI)</option>
               <option value="imagem">Imagem do computador</option>
               <option value="video">Vídeo do computador</option>
+              <option value="captura">Tela ou janela do computador</option>
+              <option value="web">Página da internet</option>
               <option value="cor">Cor sólida</option>
               <option value="barras">Barras de teste</option>
             </select></label>
@@ -69,6 +125,19 @@
             <span class="linha"><input id="ncImagem" readonly placeholder="Escolha uma imagem…" style="flex:1"><button id="btnImagem" class="peq">Escolher…</button></span></label>
           <label class="c2" data-nc="video" hidden style="flex:1 1 240px">Vídeo
             <span class="linha"><input id="ncVideo" readonly placeholder="Escolha um vídeo…" style="flex:1"><button id="btnVideo" class="peq">Escolher…</button></span></label>
+          <label class="c2" data-nc="captura" hidden style="flex:1 1 320px">Monitor ou janela
+            <span class="linha"><select id="ncCaptura" style="flex:1"></select><button id="btnCaptura" class="peq" title="Ver de novo as janelas abertas">↻</button></span></label>
+          <label class="c2" data-nc="web" hidden style="flex:1 1 280px">Endereço da página
+            <input id="ncWeb" placeholder="Ex.: https://www.paroquia.org.br/placar" spellcheck="false"></label>
+          <label class="c2" data-nc="web" hidden>Tamanho
+            <select id="ncWebTam">
+              <option value="1920x1080">Tela inteira (1920×1080)</option>
+              <option value="1280x720">Menor, letras maiores (1280×720)</option>
+              <option value="1920x200">Faixa (1920×200) — para pôr como camada</option>
+              <option value="1080x1080">Quadrado (1080×1080)</option>
+            </select></label>
+          <label class="c2" data-nc="web" hidden>Zoom
+            <select id="ncWebZoom"><option>50</option><option>75</option><option selected>100</option><option>125</option><option>150</option><option>200</option></select></label>
           <label class="c2" data-nc="cor" hidden>Cor<input id="ncCor" type="color" value="#5a1520"></label>
           <label class="c2">Ajuste
             <select id="ncAjuste"><option value="caber">Caber (imagem inteira)</option><option value="preencher">Preencher (cortar as sobras)</option></select></label>
@@ -77,9 +146,97 @@
         <div id="ncErro" class="erro"></div>
       </div>
 
+      <!-- (0.1.2) camadas da cena e imagens em todas as cenas: as caixas aparecem por cima do Preview -->
+      <div id="camadas" class="pn nova cm" hidden>
+        <div class="rot"><span id="cmTitulo">Camadas da cena</span><button id="cmFechar" class="peq">Fechar</button></div>
+        <div class="linha cm-topo" id="cmTopoCena">
+          <label class="c2" style="flex:1 1 180px">Nome da cena<input id="cmNome"></label>
+          <div class="c2 cm-modelos"><span>Modelos prontos</span>
+            <span class="linha">
+              <button class="peq" data-modelo="cheia" title="A fonte principal na tela toda">▣ Tela cheia</button>
+              <button class="peq" data-modelo="canto" title="Outra câmera pequena no canto">◱ Câmera no canto</button>
+              <button class="peq" data-modelo="lado" title="Duas câmeras do mesmo tamanho">◫ Lado a lado</button>
+              <button class="peq" data-modelo="tercos" title="Uma grande e uma ou duas pequenas ao lado">⊞ Terços</button>
+              <button class="peq" data-modelo="letras" title="As letras do MiguelAngelus por cima (fundo transparente)">𝐀 Letras embaixo</button>
+            </span></div>
+        </div>
+        <div id="cmLista" class="cm-lista"></div>
+        <div class="linha cm-add">
+          <span class="dica">Acrescentar:</span>
+          <button class="peq" data-add="fundo" title="Cor sólida ou com efeito, nas cores litúrgicas; fica atrás da principal">🎨 Fundo</button>
+          <button class="peq" data-add="ndi">📷 Câmera ou telão</button>
+          <button class="peq" data-add="imagem">🖼 Imagem…</button>
+          <button class="peq" data-add="selo">● Selo AO VIVO</button>
+          <button class="peq" data-add="brasao">Brasão da paróquia</button>
+          <button class="peq" data-add="pascom">Logo da Pascom</button>
+          <button class="peq" data-add="web" title="Uma página da internet por cima (letreiro, placar…)">🌐 Página</button>
+          <span id="cmNdiBox" class="linha" hidden><select id="cmNdi"></select><button class="peq prim" id="cmNdiOk">Pôr</button></span>
+          <span id="cmWebBox" class="linha" hidden><input id="cmWeb" placeholder="endereço da página" spellcheck="false" style="width:240px">
+            <select id="cmWebTam"><option value="1920x200">Faixa embaixo</option><option value="1920x1080">Tela inteira</option><option value="1080x1080">Quadrado no canto</option></select>
+            <button class="peq prim" id="cmWebOk">Pôr</button></span>
+        </div>
+        <label class="ck2" id="cmSemSobreporBox"><input type="checkbox" id="cmSemSobrepor"> Esta cena fica sem as imagens de “em todas as cenas”</label>
+        <div id="cmSomBox" class="cm-som">
+          <div class="linha" style="align-items:center">
+            <b>🔊 Som desta cena</b>
+            <select id="cmSomModo">
+              <option value="padrao">Padrão: a mesa + o som dos vídeos</option>
+              <option value="escolher">Escolher as fontes de som</option>
+              <option value="mudo">Sem som (a transmissão fica muda nesta cena)</option>
+            </select>
+          </div>
+          <div id="cmSomLista" class="cm-som-lista"></div>
+          <div class="linha cm-add" id="cmSomAdd">
+            <span class="dica">Acrescentar:</span>
+            <button class="peq" data-som="mesa">🎚 Mesa</button>
+            <button class="peq" data-som="video">🎬 Som dos vídeos</button>
+            <select id="cmSomEntrada"><option value="">Outra entrada ou som do computador…</option></select>
+          </div>
+          <div class="dica">Na transição, o som acompanha a imagem. A mesa é a entrada de Ajustes › Som (com o nivelador e o atraso).</div>
+        </div>
+        <div id="cmCamBox" class="cm-som cm-cam">
+          <div class="linha" style="align-items:center">
+            <b>📷 Câmera desta cena</b>
+            <select id="cmCam"></select>
+            <span id="cmCamSit" class="dica"></span>
+          </div>
+          <div id="cmCamCorpo">
+            <div class="cm-cam-grade">
+              <div class="ptz-pad" id="cmCamPad" title="Segure para mover; solte para parar">
+                <span></span><button data-ccmov="0,-1" aria-label="Para cima">▲</button><span></span>
+                <button data-ccmov="-1,0" aria-label="Para a esquerda">◀</button><button data-ccmov="home" title="Posição inicial">⌂</button><button data-ccmov="1,0" aria-label="Para a direita">▶</button>
+                <span></span><button data-ccmov="0,1" aria-label="Para baixo">▼</button><span></span>
+              </div>
+              <div class="ptz-zoom" id="cmCamZoom">
+                <button data-cczoom="1" title="Aproximar (segure)">＋ Zoom</button><button data-cczoom="-1" title="Afastar (segure)">− Zoom</button>
+                <label class="c2">Velocidade<input type="range" id="cmCamVel" min="0.1" max="1" step="0.1" value="0.4"></label>
+              </div>
+              <div class="cm-cam-acoes">
+                <button id="cmCamSalvar" class="prim" title="Pergunta à câmera onde ela está e guarda NA CENA (a câmera não grava nada)">💾 Salvar posição na cena</button>
+                <button id="cmCamIr" class="peq" title="Leva a câmera até a posição salva (a cena não muda)">▶ Ir para a posição salva</button>
+                <button id="cmCamEsquecer" class="peq" title="Apaga a posição desta cena">✕ Esquecer</button>
+              </div>
+            </div>
+            <div class="linha" style="align-items:center;margin-top:8px">
+              <span>A partir da posição:</span>
+              <select id="cmCamRastreio">
+                <option value="">fica parada</option>
+                <option value="achar">achar: centraliza a pessoa e para</option>
+                <option value="seguir">seguir: a câmera acompanha a pessoa</option>
+              </select>
+              <select id="cmCamPessoa" title="Quem achar ou seguir (cadastros guardados na aba Câmera que segue)"></select>
+            </div>
+            <div id="cmCamMsg" class="dica" style="min-height:16px"></div>
+            <div class="dica">Posicione a câmera (aqui, no joystick ou em Ajustes › Câmeras) e aperte <b>Salvar</b>. Ao pôr a cena no Preview, a câmera já vai para lá, se não estiver no ar; se estiver, vai na Transição. Num momento do Roteiro, o que estiver escolhido no momento vale mais que o da cena.</div>
+          </div>
+        </div>
+        <div class="dica" id="cmDica">Arraste as caixas no Preview para mudar o lugar; o cantinho de baixo, à direita, muda o tamanho (Shift solta a proporção).</div>
+      </div>
+
       <div class="pn rotvivo" id="rotVivo">
         <div class="rot"><span>Roteiro · <span id="rvPerfil"></span></span><span><button id="rvAnterior" class="peq" title="Momento anterior">◀</button> <button id="rvAbrir" class="peq">Editar no Roteiro</button></span></div>
         <div id="rvVideo" class="vbar2" hidden><div class="linha" style="align-items:center"><b id="rvVidNome"></b><span id="rvVidTempo" class="dica"></span><span style="flex:1"></span><button id="rvPular" class="peq">Pular vídeo</button></div><div class="pgb"><i id="rvVidPct"></i></div><div id="rvVidDepois" class="dica"></div></div>
+        <div id="rvSeguir" class="dica" hidden style="color:var(--ac);margin-bottom:4px"></div>
         <div id="rvLista" class="rvlista"></div>
         <button id="rvProximo" class="prim" style="width:100%;margin-top:8px">Próximo momento</button>
         <div id="rvAviso" class="dica" style="min-height:18px;margin-top:6px"></div>
@@ -90,6 +247,7 @@
         <span id="somDb" class="dica db">—</span>
         <span id="somNiv" class="dica"></span>
         <span id="somAviso" class="erro" style="margin:0"></span>
+        <span id="somCena" class="dica" title="O som que a cena do ar manda para a transmissão (✎ na cena › Som desta cena)"></span>
         <button id="btnMudo" class="peq" title="Corta o som da transmissão e da gravação">Mudo</button>
       </div>
       <div class="pn rtvivo" id="rtVivo" hidden>
@@ -102,6 +260,12 @@
         <button id="btnAr" class="prim">Iniciar transmissão</button>
         <div id="destinos" class="destinos"></div>
         <span id="saidaInfo" class="dica"></span>
+      </div>
+      <div id="ytVivo" class="pn ytvivo" hidden>
+        <span class="dot" id="ytVivoDot"></span>
+        <span id="ytVivoTxt" style="flex:1"></span>
+        <button class="peq" id="ytVivoStudio" title="Ver a prévia no YouTube Studio">Prévia no Studio</button>
+        <button class="vivo" id="ytVivoBtn">Entrar ao vivo no YouTube</button>
       </div>
       <div id="avisoSaida" class="erro"></div>
       <div class="rodape">
@@ -132,6 +296,16 @@
             <div class="ck">Perfil do roteiro<span class="r"><select id="inPerfil"></select></span></div>
             <div class="ck">Plataformas<span class="r" id="inDestinos"></span></div>
             <div class="ck">Título da live<span class="r" id="inTituloLive"></span></div>
+            <div class="ck" id="inYt">Live no YouTube<span class="r" id="inYtR"><span class="dica">conecte a conta em Ajustes › Transmissão</span></span></div>
+            <div id="inYtCriar" class="pn" style="margin:6px 0 0" hidden>
+              <label class="c2">Título<input id="ytTitulo" maxlength="100"></label>
+              <label class="c2" style="margin-top:6px">Descrição <span class="dica">(fica guardada para as próximas; vazia = automática)</span><textarea id="ytDescricao" rows="4" style="width:100%;resize:vertical"></textarea></label>
+              <div class="linha" style="margin-top:6px">
+                <label class="c2">Quem vê<select id="ytPrivacidade"><option value="public">Pública</option><option value="unlisted">Não listada</option><option value="private">Privada</option></select></label>
+                <span class="dica" id="ytQuando" style="flex:1;align-self:end"></span>
+                <button class="peq" id="ytCancelar" style="align-self:end">Cancelar</button><button class="peq prim" id="ytCriarOk" style="align-self:end">Criar a live</button>
+              </div>
+            </div>
             <div class="ck">Capa<span class="r" style="display:flex;align-items:center;gap:10px"><button class="peq" id="inEditarCapa">Editar padrão</button><span class="capabox" style="width:176px;border-radius:6px;box-shadow:none"><img id="inCapa" alt="Capa da live"></span></span></div>
             <div class="ck">Tela de espera automática<span class="r" style="display:flex;align-items:center;gap:8px"><input type="number" id="inEsperaMin" min="1" max="120" style="width:64px"> min antes <button class="peq" id="inEspera"></button></span></div>
             <div class="ck">Gravar no computador<span class="r" id="inGrav"></span></div>
@@ -145,7 +319,8 @@
         <div class="pn inprep">
           <div style="flex:999 1 420px;min-width:0">
             <div class="rot"><span>Depois</span></div>
-            <p class="dica" style="margin:0">As próximas celebrações aparecem aqui quando a Agenda do MiguelAngelus estiver ligada ao Cast (etapa da integração). Por enquanto, a próxima celebração é a da Capa da live.</p>
+            <div id="inProximas"></div>
+            <p class="dica" style="margin:0" id="inProximasSem">As próximas celebrações aparecem aqui quando a Agenda do MiguelAngelus estiver ligada ao Cast (etapa da integração). Por enquanto, a próxima celebração é a da Capa da live.</p>
           </div>
           <div style="flex:1 1 260px;display:flex;flex-direction:column;gap:8px">
             <button class="prim" id="inPreparar" style="padding:16px;font-size:16px">Preparar a celebração</button>
@@ -224,8 +399,9 @@
             <span class="linha" style="gap:6px"><button id="roMais" class="peq">+ Momento</button><button id="roVideoIni" class="peq tv">+ Vídeo no início</button><button id="roVideoFim" class="peq tv">+ Vídeo no fim</button></span></div>
           <div class="rohead"><span>#</span><span>Momento</span><span>Tipo</span><span>Cena que vai ao ar</span><span>Câmera e posição</span><span></span></div>
           <div id="roLista"></div>
-          <p class="dica" style="margin-top:10px"><span class="tp t-sem">sem câmera</span> só a cena · <span class="tp t-fixo">fixo</span> leva a câmera à posição · <span class="tp t-achar">achar</span> vai à posição e centraliza quem está lá · <span class="tp t-seguir">seguir</span> acompanha o rosto cadastrado · <span class="tp t-video">vídeo</span> toca do computador, com som, e pode seguir sozinho ao acabar. Clique no tipo para trocar.</p>
-          <p class="dica">Para a câmera não aparecer andando, o Cast já leva a câmera do próximo momento para a posição enquanto ela não está no ar.</p>
+          <p class="dica" style="margin-top:10px"><span class="tp t-sem">sem câmera</span> só a cena · <span class="tp t-fixo">fixo</span> leva a câmera à posição · <span class="tp t-achar">achar</span> vai à posição e centraliza quem está lá (ou procura a pessoa escolhida; não achou em 7 s, fica parada) · <span class="tp t-seguir">seguir</span> acompanha a pessoa escolhida (ou o rosto em uso na aba Câmera que segue) · <span class="tp t-video">vídeo</span> toca do computador, com som, e pode seguir sozinho ao acabar. Clique no tipo para trocar.</p>
+          <p class="dica">Para a câmera não aparecer andando, o Cast já leva a câmera do próximo momento para a posição enquanto ela não está no ar.
+            Com mais de uma câmera, use <b>+ outra câmera</b> no momento: o Cast escolhe a cena cuja câmera <b>não</b> está no ar, e a do ar fica parada.</p>
         </div>
         <div style="display:flex;flex-direction:column;gap:14px">
           <div class="pn">
@@ -236,6 +412,15 @@
               <button id="roExportar" class="peq">Exportar</button><button id="roImportar" class="peq">Importar</button><button id="roApagar" class="peq">Apagar</button>
             </div>
             <div id="roMsg" class="dica" style="min-height:18px;margin-top:6px;color:var(--ok)"></div>
+          </div>
+          <div class="pn">
+            <div class="rot">Seguir o MiguelAngelus</div>
+            <label class="ck2"><input type="checkbox" id="roSeguir"> O roteiro acompanha o telão do MiguelAngelus</label>
+            <label class="ck2" style="gap:6px">Preparar o próximo momento faltando
+              <select id="roAntes" style="width:auto"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select> slides</label>
+            <p class="dica">Quando o item no telão chega perto do fim, o Cast põe a cena do próximo momento no <b>Preview</b> e já leva a câmera <b>livre</b> para a posição. Quem aperta <b>Transição</b> é você. Precisa do MiguelAngelus 1.8.5 ou mais novo com o Controle pelo celular ligado.</p>
+            <div id="roSeguirTxt" class="dica" style="color:var(--ac)"></div>
+            <details id="roMapaBox" hidden><summary class="dica" style="cursor:pointer">Como os itens do MiguelAngelus caem nos momentos</summary><div id="roMapa" class="ro-mapa"></div></details>
           </div>
           <button id="roIniciar" class="vivo" style="padding:14px">Iniciar celebração com este perfil</button>
         </div>
@@ -250,6 +435,7 @@
         <button class="sec" data-sec="transmissao">Transmissão e gravação</button>
         <button class="sec" data-sec="capa">Capa da live</button>
         <button class="sec" data-sec="joystick">Joysticks</button>
+        <button class="sec" data-sec="botoes">Stream Deck e botões</button>
         <button class="sec" data-sec="rede">Rede e internet</button>
         <button class="sec" data-sec="miguel">MiguelAngelus e celulares</button>
         <button class="sec" data-sec="backup">Backup e sobre</button>
@@ -313,7 +499,7 @@
             <div class="dica" id="cpCorInfo" style="margin-bottom:6px"></div>
             <div class="linha" id="cpCores"></div>
             <div class="rot" style="margin-top:12px"><span>Próxima celebração</span></div>
-            <label class="c2">Data e hora<input type="datetime-local" id="cpQuando"></label>
+            <label class="c2">Data e hora <span class="dica" id="cpQuandoMi"></span><input type="datetime-local" id="cpQuando"></label>
             <label class="c2">Celebração <span class="dica" id="cpCelAuto"></span><input id="cpCelebracao" placeholder="automática pelo calendário"></label>
             <label class="c2">Celebrante<input id="cpCelebrante" placeholder="Padre …"></label>
             <div class="rot" style="margin-top:12px"><span>Textos fixos</span></div>
@@ -335,7 +521,7 @@
             <div class="linha"><button class="prim" id="cpExportar">Exportar PNG</button><button id="cpCenas">Criar as cenas no Ao vivo</button><span class="dica" id="cpMsg" style="flex:1"></span></div>
             <div class="cpinfo">
               <div class="pn"><b>Também vira cena</b><p class="dica">Tela de espera com contagem regressiva até a hora da celebração; Abertura e Encerramento no mesmo padrão. Mudou aqui, muda na cena.</p></div>
-              <div class="pn"><b>Miniatura da live</b><p class="dica">Exporte o PNG e envie como miniatura no YouTube e imagem no Facebook. A criação automática das lives vem depois, quando as contas da paróquia forem conectadas.</p></div>
+              <div class="pn"><b>Miniatura da live</b><p class="dica">Com a conta do YouTube conectada (Ajustes › Transmissão), o Início cria a live já com esta capa de miniatura (JPEG 1280×720). Para o Facebook, exporte o PNG.</p></div>
             </div>
           </div>
         </div>
@@ -346,6 +532,7 @@
         <div class="pn">
           <div class="ck">Tema<span class="r"><button class="peq" data-tema="escuro">Escuro</button><button class="peq" data-tema="claro">Claro</button></span></div>
           <div class="ck">Botões grandes (bom para usar com pressa ou em tela de toque)<span class="r"><button class="peq" id="apGrandes"></button></span></div>
+          <div class="ck">Miniatura ao vivo em cada cena<br><span class="dica">Mostra, em pequeno, o que cada cena tem agora. Mantém as câmeras, as telas e as páginas sempre abertas: se o computador ficar lento (q/s caindo, "atrasos" no rodapé), desligue.</span><span class="r"><button class="peq" id="apMini"></button></span></div>
           <div class="ck">Tamanho das letras<span class="r"><button class="peq" data-zoom="0.9">Menor</button><button class="peq" data-zoom="1">Normal</button><button class="peq" data-zoom="1.15">Maior</button></span></div>
         </div>
       </div>
@@ -362,9 +549,21 @@
         <p class="dica" style="margin:0 0 12px">Sem o MiguelAngelus, o Cast funciona sozinho com os próprios ajustes.</p>
         <div class="pn"><div class="rot"><span>MiguelAngelus na rede</span><button class="peq" id="miAtualizar">↻ Procurar</button></div><div id="miStatus"><p class="dica">Procurando…</p></div></div>
         <div class="pn" style="margin-top:12px">
+          <div class="rot"><span>Agenda do MiguelAngelus</span><button class="peq" id="miAgAtualizar">↻ Buscar agora</button></div>
+          <div id="miAgStatus" class="dica">Procurando…</div>
+          <div class="ck">Usar a agenda na capa e no Início<span class="r"><button class="peq" id="miSeguir">Ligado</button></span></div>
+          <div class="ck">Capela que este Cast transmite<span class="r"><select id="miLocal"><option value="">Todas</option></select></span></div>
+          <div class="ck">Ilustração do folheto na capa<span class="r"><button class="peq" id="miFolheto">Ligado</button> <span class="dica">a do roteiro importado no MiguelAngelus</span></span></div>
+          <div class="ck">Brasão e logo da paróquia na capa<span class="r"><button class="peq" id="miMarcas">Ligado</button> <span class="dica">os cantos de cima do telão do MiguelAngelus</span></span></div>
+          <div class="ck">Só Missas<span class="r"><button class="peq" id="miSoMissas">Ligado</button> <span class="dica">Terço, Adoração… não contam</span></span></div>
+          <div id="miProximas" style="margin-top:8px"></div>
+          <p class="dica" style="margin:8px 0 0">Ligado, a data e a hora da capa e o "Próxima Missa" do encerramento vêm daqui (o resto da capa continua seu). O MiguelAngelus precisa estar aberto com o <b>Controle pelo celular</b> ligado.</p>
+        </div>
+        <div class="pn" style="margin-top:12px">
           <div class="rot"><span>O que vem do MiguelAngelus</span></div>
           <div class="ck">Faixa de letras (NDI)<span class="r">já funciona: crie uma cena com a imagem NDI "MiguelAngelus Letras"</span></div>
-          <div class="ck">Agenda, roteiro do dia e momentos<span class="r">na integração (precisa de mudanças no MiguelAngelus)</span></div>
+          <div class="ck">Agenda (data, hora e próxima Missa da capa)<span class="r">já funciona (acima)</span></div>
+          <div class="ck">Roteiro do dia e momentos<span class="r">na integração</span></div>
           <div class="ck">Pix, nome e brasão da paróquia<span class="r">na integração · por enquanto, na Capa da live</span></div>
           <div class="ck">Câmeras PTZ e posições<span class="r">na integração · por enquanto, em Ajustes › Câmeras</span></div>
           <div class="ck">Celulares (os mesmos pareados no MiguelAngelus)<span class="r">na integração</span></div>
@@ -389,6 +588,41 @@
         <h2 style="margin:0 0 4px">🎮 Joysticks</h2>
         <p class="dica" style="margin:0 0 12px">Até dois controles USB (tipo Xbox, como o GameSir) para mexer nas câmeras PTZ e no Cast. Funcionam mesmo com o Cast minimizado. A configuração vale para este computador.</p>
         <div class="pn" id="joyPainel"></div>
+      </div>      <div data-sec="botoes" hidden>
+        <h2 style="margin:0 0 4px">Stream Deck e botões</h2>
+        <p class="dica" style="margin:0 0 12px">Teclas de um Stream Deck (Elgato) ou Stream Dock (Mirabox/Ajazz) mandam comandos para o Cast, mesmo com ele minimizado. Só funciona neste computador: ninguém na rede consegue mandar.</p>
+        <div class="pn">
+          <div class="rot"><span>Plugin "MiguelAngelus Cast" (recomendado)</span></div>
+          <p class="dica" style="margin:0 0 8px">Instala no programa do aparelho uma categoria <b>MiguelAngelus Cast</b> com as ações prontas: Cena, Transição, Corte, Tela da capa, Momento do roteiro, Mudo, Gravar, Ao vivo, PARAR câmera, Posição da câmera e Painel. É só arrastar para a tecla e escolher a cena. As teclas <b>acendem</b>: a cena no ar fica vermelha, a do Preview verde, Gravar e Ao vivo mostram o tempo. O programa do aparelho é fechado e aberto de novo para carregar o plugin.</p>
+          <div class="linha"><button class="prim" id="btPlugin">Instalar o plugin</button><span class="dica" id="btPluginSit"></span></div>
+        </div>
+        <div class="pn" style="margin-top:12px">
+          <div class="rot"><span>Sem plugin: atalhos prontos</span></div>
+          <p class="dica" style="margin:0 0 8px">Cria uma pasta em Documentos com 15 atalhos numerados (01 a 15, na ordem das teclas) e a figura de cada tecla (.png). No programa do aparelho, use a ação <b>Abrir</b> (Open / Abrir arquivo) e escolha o atalho; em "ícone", escolha a figura de mesmo nome. Em <b>Mais</b> ficam todas as cenas, direto no ar e as posições das câmeras.</p>
+          <div class="linha"><button class="prim" id="btCriar">Criar os atalhos e as figuras</button><button id="btPasta">Abrir a pasta</button><button id="btTestar">Testar (aparece um aviso aqui)</button></div>
+          <p class="dica" id="btMsg" style="margin:8px 0 0"></p>
+          <p class="dica" style="margin:6px 0 0">Mudou o nome ou a ordem das cenas, ou mudou o Cast de pasta? Crie os atalhos de novo.</p>
+        </div>
+        <div class="pn" style="margin-top:12px">
+          <div class="rot"><span>Para quem usa plugin de "pedido web" (Web Requests, API Ninja…)</span></div>
+          <p class="dica" style="margin:0 0 8px">Cole o endereço na tecla (método GET). A chave no fim é deste computador; não mostre a ninguém.</p>
+          <div class="ck">Porta<span class="r" id="btPorta"></span></div>
+          <div class="ck">Exemplo<span class="r"><code id="btExemplo" style="user-select:all"></code> <button class="peq" id="btCopiar">Copiar</button></span></div>
+          <table class="bt-tab">
+            <tr><th>Comando</th><th>O que faz</th></tr>
+            <tr><td>transicao</td><td>Transição (o efeito escolhido) do Preview para o Programa</td></tr>
+            <tr><td>corte</td><td>Corte seco do Preview para o Programa</td></tr>
+            <tr><td>preview?cena=2</td><td>Põe a cena 2 (ou o nome: cena=Altar) no Preview</td></tr>
+            <tr><td>programa?cena=2</td><td>Põe a cena 2 direto no ar</td></tr>
+            <tr><td>capa?modo=espera</td><td>Tela de espera, abertura ou encerramento no Preview (&amp;direto=1 põe no ar)</td></tr>
+            <tr><td>proximo · anterior</td><td>Momento seguinte / anterior do roteiro</td></tr>
+            <tr><td>mudo</td><td>Liga e desliga o mudo (mudo?ligado=1 ou 0 para fixar)</td></tr>
+            <tr><td>gravar</td><td>Começa a gravar; para parar, aperte 2 vezes</td></tr>
+            <tr><td>transmitir</td><td>Inicia ou encerra a transmissão: sempre 2 vezes seguidas</td></tr>
+            <tr><td>parar</td><td>PARA a câmera que segue</td></tr>
+            <tr><td>ptz?camera=1&amp;posicao=20</td><td>Leva a câmera PTZ para a posição</td></tr>
+          </table>
+        </div>
       </div>      <div data-sec="em-breve" hidden>
         <h2 style="margin:0 0 4px" id="ajBreveNome"></h2>
         <div class="pn breve"><p class="dica" id="ajBreveTxt" style="margin:0">Em construção.</p></div>
@@ -445,6 +679,19 @@
       <div class="pn" data-sec="transmissao" hidden>
         <h2 style="margin:0 0 4px">Transmissão e gravação</h2>
         <p class="dica" style="margin:0 0 12px">As chaves ficam criptografadas pelo Windows, só neste computador e nesta conta. Depois de salvas, não aparecem mais (só os 4 últimos caracteres) e não vão para o backup.</p>
+        <div class="pn" style="margin-bottom:14px" id="ytConta">
+          <div class="rot"><span>Conta do YouTube</span><span class="dica" id="ytCanal"></span></div>
+          <p class="dica" style="margin:0 0 8px">Com a conta do canal conectada, o Cast cria a live agendada com o título, a hora e a capa de miniatura, e liga a chave sozinho (uma chave própria, "MiguelAngelus Cast", que não mexe nas do OBS). A live entra no ar quando você inicia a transmissão e termina quando você encerra.</p>
+          <div class="linha"><button class="peq" id="ytCliente">Carregar ID do cliente (JSON)…</button><button class="peq prim" id="ytConectar">Conectar</button><button class="peq" id="ytDesconectar">Desconectar</button><span class="dica" id="ytMsg" style="flex:1"></span></div>
+          <details style="margin-top:8px"><summary class="dica">Como preparar (uma vez)</summary>
+            <ol class="dica" style="margin:6px 0 0 18px;padding:0">
+              <li>No Google Cloud, no mesmo projeto do MiguelAngelus: <b>APIs e serviços › Biblioteca › YouTube Data API v3 › Ativar</b>.</li>
+              <li>Em <b>Tela de consentimento OAuth</b>: se estiver "Em teste", a conta do canal precisa estar em <b>Usuários de teste</b> (e o acesso vence a cada 7 dias; publicado, não vence).</li>
+              <li>O <b>ID do cliente</b> pode ser o mesmo JSON "App para computador" do MiguelAngelus. Carregue aqui e clique em Conectar.</li>
+              <li>No navegador, entre com a conta <b>dona do canal</b> (ou que gerencia o canal) e permita o acesso ao YouTube.</li>
+            </ol>
+          </details>
+        </div>
         <div id="ajDestinos"></div>
         <div class="linha" style="margin-top:14px">
           <label class="c2">Qualidade do vídeo
@@ -473,5 +720,10 @@
 </div>
 <script src="app.js"></script>
   <script src="joystick.js"></script>
+  <script src="camadas.js"></script>
+  <script src="botoes.js"></script>
+  <script src="somcena.js"></script>
+  <script src="camcena.js"></script>
+<script src="cowabunga.js"></script>
 </body>
 </html>

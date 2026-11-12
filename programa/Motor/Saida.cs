@@ -60,6 +60,8 @@ namespace MiguelAngelusCast.Motor
         public bool AoVivo { get; private set; }
         public bool Gravando { get; private set; }
         Stopwatch relAr, relGrav; string arquivoGravacao;
+        public string TempoAr => relAr == null ? "" : relAr.Elapsed.ToString(@"hh\:mm\:ss");      // (0.1.6) teclas do Stream Dock
+        public string TempoGrav => relGrav == null ? "" : relGrav.Elapsed.ToString(@"hh\:mm\:ss");
         public long QuadrosEnviados, QuadrosPerdidos; public string CodUsado = "", ErroCod = "";
         public event Action Mudou;
         public Som Som;                                  // de onde vem o áudio (sem ele: silêncio)

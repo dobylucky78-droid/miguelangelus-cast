@@ -12,6 +12,7 @@ namespace MiguelAngelusCast.Motor
     {
         public int L, A;
         public byte[] Px = Array.Empty<byte>();   // BGRA, 4 bytes por pixel, sem folga no fim da linha
+        public bool TemAlfa;                        // (0.1.2) transparência de verdade (PNG, NDI em BGRA): usada nas camadas
         public Imagem() { }
         public Imagem(int l, int a) { Garantir(l, a); }
         public void Garantir(int l, int a)
@@ -37,6 +38,10 @@ namespace MiguelAngelusCast.Motor
             if (spec.StartsWith("imagem:")) return new FonteImagem(spec.Substring(7));
             if (spec.StartsWith("video:")) return new FonteVideo(spec.Substring(6), 1920, 1080, 30);
             if (spec.StartsWith("capa:")) return new FonteCapa(spec.Substring(5));
+            if (spec.StartsWith("selo:")) return new FonteSelo(spec.Substring(5));
+            if (spec.StartsWith("fundo:")) return new FonteFundo(spec.Substring(6), 1920, 1080);
+            if (spec.StartsWith("tela:") || spec.StartsWith("janela:")) return new FonteCaptura(spec);
+            if (spec.StartsWith("web:")) return new FonteNavegador(spec);
             return new FonteBarras();
         }
     }
@@ -116,6 +121,7 @@ namespace MiguelAngelusCast.Motor
             {
                 using var bmp = new Bitmap(caminho);
                 Carregar(bmp, img);
+                img.TemAlfa = Image.IsAlphaPixelFormat(bmp.PixelFormat);
                 Estado = "ok";
             }
             catch (Exception e) { Estado = "não abriu a imagem"; Registro.Erro("imagem " + caminho, e); }
@@ -126,6 +132,39 @@ namespace MiguelAngelusCast.Motor
             var d = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             try { for (int y = 0; y < d.Height; y++) Marshal.Copy(d.Scan0 + y * d.Stride, img.Px, y * img.L * 4, img.L * 4); }
             finally { bmp.UnlockBits(d); }
+        }
+        public override Imagem Atual() => img;
+    }
+
+    // (0.1.2) Selo pronto para pôr por cima das cenas: "AO VIVO" (pílula vermelha com o pontinho), com fundo transparente
+    public sealed class FonteSelo : Fonte
+    {
+        readonly Imagem img = new Imagem(16, 9);
+        public FonteSelo(string qual)
+        {
+            Spec = "selo:" + qual; Seq = 1; Estado = "ok";
+            const int L = 560, A = 150;
+            using var bmp = new Bitmap(L, A, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+                g.Clear(Color.Transparent);
+                using var cam = new System.Drawing.Drawing2D.GraphicsPath();
+                float r = A - 20, x = 10, y = 10, w = L - 20;
+                cam.AddArc(x, y, r, r, 90, 180); cam.AddArc(x + w - r, y, r, r, 270, 180); cam.CloseFigure();
+                using (var sombra = new SolidBrush(Color.FromArgb(70, 0, 0, 0))) { g.TranslateTransform(0, 4); g.FillPath(sombra, cam); g.ResetTransform(); }
+                using (var fundo = new SolidBrush(Color.FromArgb(235, 214, 38, 44))) g.FillPath(fundo, cam);
+                using (var branco = new SolidBrush(Color.White))
+                {
+                    g.FillEllipse(branco, 62, A / 2f - 21, 42, 42);
+                    using var fonte = new Font("Segoe UI", 64, FontStyle.Bold, GraphicsUnit.Pixel);
+                    var sf = StringFormat.GenericTypographic;
+                    var tam = g.MeasureString("AO VIVO", fonte, PointF.Empty, sf);
+                    g.DrawString("AO VIVO", fonte, branco, 128 + (L - 40 - 128 - tam.Width) / 2, (A - tam.Height) / 2 - 2, sf);
+                }
+            }
+            FonteImagem.Carregar(bmp, img);
+            img.TemAlfa = true;
         }
         public override Imagem Atual() => img;
     }

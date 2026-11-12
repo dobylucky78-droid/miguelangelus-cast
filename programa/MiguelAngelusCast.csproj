@@ -1,8 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <!--
-    MiguelAngelus Cast: transmissÃ£o de celebraÃ§Ãµes. CÃ³digo aberto (MIT).
-    v0 = transmissÃ£o (cenas, transiÃ§Ãµes, saÃ­da, som, roteiro). Rastreio da PTZ (pasta Rastreio\): a lÃ³gica do kit em ..\kit-rastreio.
-    .NET 8, publicado "self-contained": nÃ£o precisa instalar o .NET no computador da igreja.
+    MiguelAngelus Cast: transmissão de celebrações. Código aberto (MIT).
+    v0 = transmissão (cenas, transições, saída, som, roteiro). Rastreio da PTZ (pasta Rastreio\): a lógica do kit em ..\kit-rastreio.
+    .NET 8, publicado "self-contained": não precisa instalar o .NET no computador da igreja.
     Gerar:  dotnet publish -c Release -o "<pasta>"
   -->
   <PropertyGroup>
@@ -19,16 +19,16 @@
     <RootNamespace>MiguelAngelusCast</RootNamespace>
     <ApplicationIcon>icone.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>0.0.4</Version>
+    <Version>0.1.10</Version>
     <Product>MiguelAngelus Cast</Product>
-    <Description>MiguelAngelus Cast â€” transmissÃ£o de celebraÃ§Ãµes</Description>
-    <Copyright>Copyright (c) 2026 Marcio Aurelio Rios Martins â€” licenÃ§a MIT</Copyright>
+    <Description>MiguelAngelus Cast — transmissão de celebrações</Description>
+    <Copyright>Copyright (c) 2026 Marcio Aurelio Rios Martins — licença MIT</Copyright>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
     <SatelliteResourceLanguages>pt-BR</SatelliteResourceLanguages>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>
-    <!-- o pacote do WebView2 traz tambÃ©m a parte de WPF, que nÃ£o usamos -->
+    <!-- o pacote do WebView2 traz também a parte de WPF, que não usamos -->
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
   <ItemGroup>
@@ -41,7 +41,9 @@
   <ItemGroup>
     <Content Include="web\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="modelos\**\*" CopyToOutputDirectory="PreserveNewest" />
-    <!-- FFmpeg LGPL (build "lgpl-shared" do BtbN), processo separado, com a sua LICENSE. NÃ£o vai para o repositÃ³rio. -->
+    <!-- (0.1.6) plugin para o Stream Dock / Stream Deck; o Cast instala pelos Ajustes -->
+    <Content Include="streamdock\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- FFmpeg LGPL (build "lgpl-shared" do BtbN), processo separado, com a sua LICENSE. Não vai para o repositório. -->
     <Content Include="ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" Condition="Exists('ffmpeg\ffmpeg.exe')" />
   </ItemGroup>
 </Project>

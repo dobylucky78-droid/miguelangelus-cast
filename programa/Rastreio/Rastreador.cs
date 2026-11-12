@@ -132,6 +132,7 @@ namespace MiguelAngelusCast.Rastreio
         public void AcharMaior() { pedirMaior = true; tel.Evento("Roteiro: achar (seguir o maior rosto)"); }
         public void SoltarAlvo() { pedirSoltar = true; pedirMaior = false; tel.Evento("Roteiro: soltar o alvo"); }
         public string Estado => estado;
+        public bool Movendo => real ? movendo : movX || movY;      // (0.1.9) o roteiro espera parar no centro (achar com nome)
 
         public void Cadastrar() { coletados.Clear(); coletar = 12; NomeCadastro = null; tel.Evento("Cadastro iniciado (pessoa autorizou)"); }
         // cadastro guardado (Pessoas.cs): volta a ser o alvo reconhecido, sem cadastrar de novo

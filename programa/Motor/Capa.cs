@@ -39,6 +39,14 @@ namespace MiguelAngelusCast.Motor
         public string Proxima { get; set; } = "";             // "Domingo, 07h00" no Encerramento
         public bool EsperaAuto { get; set; }                  // põe a Tela de espera no ar sozinho, X minutos antes
         public int EsperaMin { get; set; } = 15;
+        // (0.0.5) agenda do MiguelAngelus: data/hora e "Próxima Missa" vêm de lá (Motor\Miguel.cs)
+        public bool SeguirMiguel { get; set; } = true;
+        public string MiguelLocal { get; set; } = "";          // sigla da capela que este Cast transmite ("" = todas)
+        public bool MiguelSoMissas { get; set; } = true;       // Terço, Adoração… não viram "próxima transmissão"
+        public bool MiguelFolheto { get; set; } = true;        // (0.0.6) ilustração do folheto vem do roteiro do MiguelAngelus
+        public bool MiguelMarcas { get; set; } = true;         // (0.0.7) brasão e logo vêm dos cantos do telão do MiguelAngelus
+        public string YtPrivacidade { get; set; } = "public";   // (0.0.8) live criada pelo Cast: public | unlisted | private
+        public string YtDescricao { get; set; } = "";
 
         static DateTime ProximoDomingo()
         {
@@ -240,15 +248,29 @@ namespace MiguelAngelusCast.Motor
                     y += 2.6f * u;
                     string rot = fim ? "PRÓXIMA MISSA" : "AO VIVO", data = fim ? c.Proxima.Trim() : DataLonga(c.Quando), hora = fim ? "" : Hora(c.Quando);
                     string cont = null;
-                    if (espera) { var falta = c.Quando - now; cont = falta.TotalSeconds <= 0 ? "JÁ VAI COMEÇAR" : falta.TotalHours >= 1 ? "COMEÇA EM " + (int)falta.TotalHours + "H" + falta.Minutes.ToString("00") : "COMEÇA EM " + falta.Minutes + ":" + falta.Seconds.ToString("00"); }
-                    using var fRot = new Font("Segoe UI", 1.15f * u, GraphicsUnit.Pixel); using var fData = new Font("Segoe UI Semibold", 1.9f * u, GraphicsUnit.Pixel);
-                    using var fHora = new Font("Segoe UI", 2.7f * u, FontStyle.Bold, GraphicsUnit.Pixel); using var fCont = new Font("Segoe UI Semibold", 1.2f * u, GraphicsUnit.Pixel);
+                    if (espera)
+                    {
+                        var falta = c.Quando - now;
+                        cont = falta.TotalSeconds <= 0 ? "JÁ VAI COMEÇAR"
+                             : falta.TotalDays >= 1 ? (falta.Days == 1 ? "FALTA 1 DIA" : "FALTAM " + falta.Days + " DIAS") + (falta.Hours > 0 ? " E " + falta.Hours + "H" : "")
+                             : falta.TotalHours >= 1 ? "FALTAM " + (int)falta.TotalHours + "H" + falta.Minutes.ToString("00")
+                             : "FALTAM " + falta.Minutes + ":" + falta.Seconds.ToString("00");
+                    }
                     var sf = StringFormat.GenericTypographic;
-                    float wRot = LarguraEspacada(g, rot, fRot, .14f), wData = g.MeasureString(data, fData, PointF.Empty, sf).Width;
-                    float wEsq = Math.Max(wRot, wData) + 3.4f * u, hEsq = 2.5f * u + 1.15f * u * 1.25f + .3f * u + 1.9f * u * 1.25f;
+                    using var fRot = new Font("Segoe UI", 1.15f * u, GraphicsUnit.Pixel);
+                    using var fHora = new Font("Segoe UI", 2.7f * u, FontStyle.Bold, GraphicsUnit.Pixel); using var fCont = new Font("Segoe UI Semibold", 1.05f * u, GraphicsUnit.Pixel);
                     float wHora = hora == "" ? 0 : g.MeasureString(hora, fHora, PointF.Empty, sf).Width, wCont = cont == null ? 0 : LarguraEspacada(g, cont, fCont, .1f);
-                    float wDir = hora == "" ? 0 : Math.Max(wHora, wCont) + 3.8f * u;
-                    float wBox = L.esticar ? tw : wEsq + wDir, hBox = hEsq, bx = L.centro ? x0 + (tw - wBox) / 2 : x0;
+                    float wDir = hora == "" ? 0 : Math.Max(wHora, wCont) + 3.4f * u;
+                    // a data diminui (até 70%) para caber ao lado da hora, sem passar por baixo dela
+                    float tData = 1.9f * u, wRot = LarguraEspacada(g, rot, fRot, .14f);
+                    var fData = new Font("Segoe UI Semibold", tData, GraphicsUnit.Pixel);
+                    float wData = g.MeasureString(data, fData, PointF.Empty, sf).Width;
+                    while (L.esticar && Math.Max(wRot, wData) + 3.4f * u + wDir > tw && tData > 1.9f * u * .7f)
+                    { fData.Dispose(); tData *= .95f; fData = new Font("Segoe UI Semibold", tData, GraphicsUnit.Pixel); wData = g.MeasureString(data, fData, PointF.Empty, sf).Width; }
+                    float wEsq = Math.Max(wRot, wData) + 3.4f * u, hEsq = 2.5f * u + 1.15f * u * 1.25f + .3f * u + tData * 1.25f;
+                    // hora + contagem: a hora (2,7u) e a contagem logo abaixo, com folga para não encostar
+                    float hh = 2.7f * u * 1.2f + (cont != null ? .35f * u + 1.05f * u * 1.2f : 0);
+                    float wBox = L.esticar ? Math.Max(tw, wEsq + wDir) : wEsq + wDir, hBox = Math.Max(hEsq, hh + 2.2f * u), bx = L.centro ? x0 + (tw - wBox) / 2 : x0;
                     using (var cx = Arred(new RectangleF(bx, y, wBox, hBox), 1.25f * u))
                     {
                         var st = g.Save(); g.SetClip(cx);
@@ -256,14 +278,16 @@ namespace MiguelAngelusCast.Motor
                         if (wDir > 0) using (var ba = new SolidBrush(P.Acento)) g.FillRectangle(ba, bx + wBox - wDir, y, wDir, hBox);
                         g.Restore(st);
                     }
-                    Espacado(g, rot, fRot, bSu, bx + 1.7f * u, y + 1.25f * u, 0, false, .14f);
-                    g.DrawString(data, fData, bTi, bx + 1.7f * u, y + 1.25f * u + 1.15f * u * 1.25f + .3f * u, sf);
+                    float ty = y + (hBox - hEsq) / 2;
+                    Espacado(g, rot, fRot, bSu, bx + 1.7f * u, ty + 1.25f * u, 0, false, .14f);
+                    g.DrawString(data, fData, bTi, bx + 1.7f * u, ty + 1.25f * u + 1.15f * u * 1.25f + .3f * u, sf);
+                    fData.Dispose();
                     if (wDir > 0)
                     {
                         using var bTa = new SolidBrush(tintaAcento);
-                        float hx = bx + wBox - wDir, hh = 2.7f * u + (cont != null ? 1.3f * u : 0), hy = y + (hBox - hh) / 2 - .1f * u;
+                        float hx = bx + wBox - wDir, hy = y + (hBox - hh) / 2;
                         g.DrawString(hora, fHora, bTa, hx + (wDir - wHora) / 2, hy, sf);
-                        if (cont != null) Espacado(g, cont, fCont, bTa, hx + (wDir - wCont) / 2, hy + 2.9f * u, 0, false, .1f);
+                        if (cont != null) Espacado(g, cont, fCont, bTa, hx + (wDir - wCont) / 2, hy + 2.7f * u * 1.2f + .35f * u, 0, false, .1f);
                     }
                     y += hBox;
                 }
@@ -308,12 +332,14 @@ namespace MiguelAngelusCast.Motor
         {
             using var b = Desenhar(modo, W, H); using var ms = new MemoryStream(); b.Save(ms, ImageFormat.Png); return ms.ToArray();
         }
-        public static string JpegBase64(string modo, CapaCfg c, int W = 960, int H = 540)
+        public static string JpegBase64(string modo, CapaCfg c, int W = 960, int H = 540) => Convert.ToBase64String(Jpeg(modo, W, H, c));
+        // (0.0.8) miniatura do YouTube: JPEG 1280×720 (o limite de lá é 2 MB; fica em ~200–400 KB)
+        public static byte[] Jpeg(string modo, int W = 1280, int H = 720, CapaCfg c = null, long qualidade = 90)
         {
             using var b = Desenhar(modo, W, H, c); using var ms = new MemoryStream();
             var enc = Array.Find(ImageCodecInfo.GetImageEncoders(), e => e.FormatID == ImageFormat.Jpeg.Guid);
-            using var ps = new EncoderParameters(1); ps.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
-            b.Save(ms, enc, ps); return Convert.ToBase64String(ms.ToArray());
+            using var ps = new EncoderParameters(1); ps.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, qualidade);
+            b.Save(ms, enc, ps); return ms.ToArray();
         }
 
         // ---------- ajudantes de desenho ----------

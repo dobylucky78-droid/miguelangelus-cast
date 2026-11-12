@@ -1,4 +1,4 @@
-// Recepção NDI (usa o NDI Runtime instalado, o mesmo do MiguelAngelus e do OBS)
+﻿// Recepção NDI (usa o NDI Runtime instalado, o mesmo do MiguelAngelus e do OBS)
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -31,8 +31,16 @@ namespace MiguelAngelusCast.Motor
 
         static IntPtr busca;
         static bool tentou;
-        public static string Erro { get; private set; }
+        static string erro;
+        public static string Erro { get => inicio != null && !inicio.IsCompleted ? "O NDI ainda está iniciando… (alguns segundos)" : erro; private set => erro = value; }
         static readonly object trava = new object();
+
+        // (0.1.1) O NDI leva vários segundos para iniciar (11 s num PC de casa). Começa ao abrir o Cast, num fio à parte, e
+        // ninguém espera por ele: enquanto não fica pronto, a lista de fontes vem vazia e quem precisa tenta de novo.
+        static System.Threading.Tasks.Task<bool> inicio;
+        static readonly object travaInicio = new object();
+        public static System.Threading.Tasks.Task<bool> IniciarAoFundo() { lock (travaInicio) return inicio ??= System.Threading.Tasks.Task.Run(Iniciar); }
+        public static bool Pronto => inicio != null && inicio.IsCompleted && inicio.Result;
 
         public static bool Iniciar()
         {
@@ -60,7 +68,8 @@ namespace MiguelAngelusCast.Motor
         public static List<(string nome, Origem origem)> Fontes()
         {
             var l = new List<(string, Origem)>();
-            if (!Iniciar()) return l;
+            var t = IniciarAoFundo();
+            if (!t.IsCompleted || !t.Result) return l;       // ainda iniciando (ou sem NDI): não trava quem chamou
             var p = NDIlib_find_get_current_sources(busca, out uint n);
             int tam = Marshal.SizeOf<Origem>();
             for (int i = 0; i < n; i++)
@@ -76,7 +85,7 @@ namespace MiguelAngelusCast.Motor
         {
             IntPtr recv; readonly Thread laco; volatile bool rodando = true;
             readonly object trava = new object();
-            byte[] buf = Array.Empty<byte>(); int w, h; long seq;
+            byte[] buf = Array.Empty<byte>(); int w, h; long seq; bool alfa;
             public long Recebidos;
 
             public Receptor(Origem o, string nomeReceptor)
@@ -100,7 +109,7 @@ namespace MiguelAngelusCast.Motor
                         if (buf.Length != linha * q.altura) buf = new byte[linha * q.altura];
                         if (q.bytesPorLinha == linha) Marshal.Copy(q.dados, buf, 0, linha * q.altura);
                         else for (int y = 0; y < q.altura; y++) Marshal.Copy(q.dados + y * q.bytesPorLinha, buf, y * linha, linha);
-                        w = q.largura; h = q.altura; seq++;
+                        w = q.largura; h = q.altura; seq++; alfa = q.fourCC == 0x41524742;   // BGRA (com alfa) ou BGRX
                     }
                     Recebidos++;
                     NDIlib_recv_free_video_v2(recv, ref q);
@@ -115,6 +124,7 @@ namespace MiguelAngelusCast.Motor
                     if (seq == ultimo || w == 0) return false;
                     destino.Garantir(w, h);
                     Buffer.BlockCopy(buf, 0, destino.Px, 0, buf.Length);
+                    destino.TemAlfa = alfa;
                     ultimo = seq;
                     return true;
                 }

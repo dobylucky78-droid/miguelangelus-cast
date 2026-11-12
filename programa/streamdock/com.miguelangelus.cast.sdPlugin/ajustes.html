@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>MiguelAngelus Cast · ajustes da tecla</title>
+<style>
+  body { margin: 0; padding: 10px 12px; background: #2d2d2d; color: #d8d8d8; font: 13px "Segoe UI", sans-serif; }
+  .linha { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+  .linha label { width: 92px; text-align: right; color: #a8a8a8; flex: none; }
+  select, input[type=text] { flex: 1; min-width: 0; background: #3d3d3d; color: #eee; border: 1px solid #555; border-radius: 3px; padding: 4px 6px; font: inherit; }
+  .dica { color: #9a9a9a; font-size: 12px; margin: 4px 0 8px 100px; }
+  .erro { color: #f0a54a; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div id="pCena" hidden>
+    <div class="linha"><label>Cena</label><select id="cena"></select></div>
+    <div class="linha"><label>Ao apertar</label><select id="cenaModo"><option value="preview">põe no Preview</option><option value="programa">põe direto NO AR</option></select></div>
+    <div class="dica">Vermelha = no ar · verde = no Preview. O número segue a ordem das cenas no Cast.</div>
+  </div>
+  <div id="pCapa" hidden>
+    <div class="linha"><label>Tela</label><select id="capaModo"><option value="espera">Tela de espera</option><option value="abertura">Abertura</option><option value="encerramento">Encerramento</option></select></div>
+    <div class="linha"><label>Ao apertar</label><select id="capaDireto"><option value="">põe no Preview</option><option value="1">põe direto NO AR</option></select></div>
+  </div>
+  <div id="pMomento" hidden>
+    <div class="linha"><label>Momento</label><select id="dir"><option value="proximo">Próximo ▶</option><option value="anterior">◀ Anterior</option></select></div>
+    <div class="dica">A tecla mostra o nome do momento que vai entrar.</div>
+  </div>
+  <div id="pPtz" hidden>
+    <div class="linha"><label>Câmera</label><select id="camera"></select></div>
+    <div class="linha"><label>Posição</label><select id="posicao"></select></div>
+    <div class="dica">As posições vêm de Ajustes › Câmeras, no Cast.</div>
+  </div>
+  <div id="pInfo" hidden>
+    <div class="linha"><label>Mostrar</label><select id="mostrar">
+      <option value="tempo">Tempo no ar / gravando (e a hora)</option><option value="hora">Hora e data</option>
+      <option value="programa">A cena que está no ar</option><option value="momento">O momento do roteiro</option></select></div>
+    <div class="dica">Esta tecla só mostra; boa para a barrinha do lado.</div>
+  </div>
+  <div id="pAbrir" hidden>
+    <div class="linha"><label>Ícone</label><select id="programa"><option value="cast">MiguelAngelus Cast</option><option value="miguel">MiguelAngelus</option></select></div>
+    <div class="dica">Apertando, traz o programa para a frente; o MiguelAngelus abre se estiver fechado (precisa do Cast aberto). Na barrinha lateral fica só o ícone.</div>
+  </div>
+  <div id="pSimples" hidden><div class="dica" id="txtSimples" style="margin-left:0"></div></div>
+  <div class="dica erro" id="erro" style="margin-left:0" hidden></div>
+
+  <script src="cast.js"></script>
+  <script>
+  let ws, ctx, acao, ajustes = {}, est = null;
+  const $ = id => document.getElementById(id);
+  const TEXTOS = {
+    transicao: 'Leva o Preview para o ar com o efeito escolhido no Cast. Mostra qual cena vai entrar.',
+    corte: 'Leva o Preview para o ar num corte seco.',
+    mudo: 'Corta e devolve o som da transmissão. Vermelha = sem som.',
+    gravar: 'Começa a gravar com 1 toque. Para PARAR, aperte 2 vezes (em 3 segundos). Mostra o tempo gravado.',
+    aovivo: 'Inicia ou encerra a transmissão: sempre 2 toques em 3 segundos. Mostra o tempo no ar.',
+    parar: 'Para na hora a câmera que segue (fica apagada quando ela não está ligada).'
+  };
+
+  function salvar() {
+    ws?.send(JSON.stringify({ event: 'setSettings', context: ctx, payload: ajustes }));
+    ws?.send(JSON.stringify({ event: 'sendToPlugin', action: 'com.miguelangelus.cast.' + acao, context: ctx, payload: { settings: ajustes } }));
+  }
+  function opcoes(sel, itens, valor) {
+    sel.innerHTML = itens.map(i => `<option value="${i.v}">${i.t.replace(/</g, '&lt;')}</option>`).join('');
+    if (valor != null && itens.some(i => String(i.v) === String(valor))) sel.value = String(valor);
+  }
+  function preencher() {
+    const cenas = est?.cenas || [], cams = est?.cameras || [];
+    opcoes($('cena'), cenas.length ? cenas.map(c => ({ v: c.n, t: `${c.n} · ${c.nome}` })) : [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => ({ v: n, t: 'Cena ' + n })), ajustes.cena || 1);
+    $('cenaModo').value = ajustes.modo === 'programa' ? 'programa' : 'preview';
+    $('capaModo').value = ajustes.modo || 'espera'; $('capaDireto').value = ajustes.direto ? '1' : '';
+    $('dir').value = ajustes.dir === 'anterior' ? 'anterior' : 'proximo';
+    opcoes($('camera'), cams.length ? cams.map(c => ({ v: c.n, t: `${c.n} · ${c.nome}` })) : [{ v: 1, t: 'Câmera 1' }], ajustes.camera || 1);
+    const cam = cams.find(c => String(c.n) === String($('camera').value));
+    opcoes($('posicao'), cam && cam.posicoes.length ? cam.posicoes.map(p => ({ v: p.n, t: `${p.n} · ${p.nome}` })) : [{ v: '', t: '(nenhuma posição guardada)' }], ajustes.posicao);
+    $('mostrar').value = ajustes.mostrar || 'tempo';
+    $('programa').value = ajustes.programa === 'miguel' ? 'miguel' : 'cast';
+  }
+  async function lerCast() {
+    if (typeof CAST === 'undefined') { $('erro').textContent = 'Abra o MiguelAngelus Cast e use Ajustes › Stream Deck e botões › Instalar o plugin.'; $('erro').hidden = false; return; }
+    try { est = await (await fetch(`http://127.0.0.1:${CAST.porta}/estado?chave=${encodeURIComponent(CAST.chave)}`, { cache: 'no-store' })).json(); $('erro').hidden = true; }
+    catch { est = null; $('erro').textContent = 'O Cast está fechado: abra-o para ver os nomes das cenas e das câmeras.'; $('erro').hidden = false; }
+    preencher();
+  }
+  function mostrarPainel() {
+    const p = { cena: 'pCena', capa: 'pCapa', momento: 'pMomento', ptz: 'pPtz', info: 'pInfo', abrir: 'pAbrir' }[acao] || 'pSimples';
+    ['pCena', 'pCapa', 'pMomento', 'pPtz', 'pInfo', 'pAbrir', 'pSimples'].forEach(id => $(id).hidden = id !== p);
+    $('txtSimples').textContent = TEXTOS[acao] || '';
+  }
+
+  $('cena').onchange = () => { ajustes.cena = $('cena').value; salvar(); };
+  $('cenaModo').onchange = () => { ajustes.modo = $('cenaModo').value; salvar(); };
+  $('capaModo').onchange = () => { ajustes.modo = $('capaModo').value; salvar(); };
+  $('capaDireto').onchange = () => { ajustes.direto = $('capaDireto').value === '1'; salvar(); };
+  $('dir').onchange = () => { ajustes.dir = $('dir').value; salvar(); };
+  $('camera').onchange = () => { ajustes.camera = $('camera').value; delete ajustes.posicao; preencher(); ajustes.posicao = $('posicao').value; salvar(); };
+  $('posicao').onchange = () => { ajustes.posicao = $('posicao').value; salvar(); };
+  $('mostrar').onchange = () => { ajustes.mostrar = $('mostrar').value; salvar(); };
+  $('programa').onchange = () => { ajustes.programa = $('programa').value; salvar(); };
+
+  function connectElgatoStreamDeckSocket(porta, uuid, registrar, app, infoAcao) {
+    const info = JSON.parse(infoAcao || '{}');
+    ctx = info.context || uuid; acao = (info.action || '').replace('com.miguelangelus.cast.', '');
+    ajustes = info.payload?.settings || {};
+    mostrarPainel(); lerCast();
+    ws = new WebSocket('ws://127.0.0.1:' + porta);
+    ws.onopen = () => { ws.send(JSON.stringify({ event: registrar, uuid })); ws.send(JSON.stringify({ event: 'getSettings', context: ctx })); };
+    ws.onmessage = e => {
+      const m = JSON.parse(e.data);
+      if (m.event === 'didReceiveSettings') { ajustes = m.payload?.settings || {}; preencher(); }
+    };
+    // tecla nova de cena/PTZ: grava o padrão já, para o plugin desenhar certo
+    setTimeout(() => {
+      if (acao === 'cena' && ajustes.cena == null) { ajustes.cena = $('cena').value || 1; salvar(); }
+      if (acao === 'ptz' && ajustes.posicao == null && $('posicao').value) { ajustes.camera = $('camera').value; ajustes.posicao = $('posicao').value; salvar(); }
+    }, 900);
+  }
+  const connectSocket = connectElgatoStreamDeckSocket;
+  </script>
+</body>
+</html>

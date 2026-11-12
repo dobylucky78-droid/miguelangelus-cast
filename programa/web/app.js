@@ -20,6 +20,45 @@ let tema = 'escuro'; try { tema = localStorage.getItem('cast.tema') || 'escuro';
 aplicarTema(tema);
 $('#btnTema').onclick = () => { tema = tema === 'claro' ? 'escuro' : 'claro'; aplicarTema(tema); };
 
+// ---------- (0.1.1) tela de abertura: fica 10 segundos (sincronizando ou não com o MiguelAngelus); um clique pula ----------
+const SPLASH = { ini: Date.now(), fechada: false, timer: 0 };
+function fecharSplash(espera = 0) {
+  if (SPLASH.fechada) return;
+  clearTimeout(SPLASH.timer);
+  SPLASH.timer = setTimeout(() => {
+    if (SPLASH.fechada) return;
+    SPLASH.fechada = true;
+    SPLASH.fechouEm = Math.round(performance.now());           // para conferir quanto tempo ficou
+    SPLASH.ultimo = $('#splashStatus').textContent;
+    $('#splash').classList.add('saindo');
+    setTimeout(() => $('#splash').remove(), 400);
+  }, Math.max(0, espera));
+}
+function splashMiguel(m) {
+  if (SPLASH.fechada) return;
+  const passou = Date.now() - SPLASH.ini;
+  if (!m.erro) {                                        // achou: mostra de onde e completa os 10 s
+    $('#splashStatus').textContent = 'Sincronizado com o MiguelAngelus' + (m.origem && m.origem !== '127.0.0.1' ? ' (' + m.origem + ')' : '');
+    fecharSplash(10000 - passou);
+  } else if (!/procurando/i.test(m.erro)) {            // procurou e não achou: segue sem ele, completando os 10 s
+    $('#splashStatus').textContent = 'MiguelAngelus não encontrado — seguindo sem ele';
+    fecharSplash(10000 - passou);
+  }
+}
+setTimeout(() => fecharSplash(), 10000);      // 10 segundos e segue
+$('#splash')?.addEventListener('click', () => fecharSplash());   // pressa: um clique fecha
+enviar({ tipo: 'miguelPedir' });
+
+// ---------- (0.1.1) Sobre: no logotipo ou no nome do programa ----------
+function abrirSobre() { const d = $('#dlgSobre'); if (!d.open) d.showModal(); }
+$('.marca').onclick = abrirSobre;
+$('.marca').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSobre(); } };
+$$('#dlgSobre [data-link]').forEach(b => b.onclick = () => enviar({ tipo: 'abrirLink', url: b.dataset.link }));
+$('#dlgSobre').onclick = e => {      // clique fora (no fundo escuro) fecha
+  const d = e.currentTarget, r = d.getBoundingClientRect();
+  if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close();
+};
+
 // ---------- navegação ----------
 $$('nav [data-tela]').forEach(b => b.onclick = () => {
   $$('nav [data-tela]').forEach(x => x.classList.toggle('sel', x === b));
@@ -35,15 +74,16 @@ $$('nav [data-tela]').forEach(b => b.onclick = () => {
 if (NO_APP) {
   window.chrome.webview.addEventListener('sharedbufferreceived', e => {
     const d = e.additionalData || {};
-    if (d.tipo === 'monitores') mon = { buf: e.getBuffer(), l: d.l, a: d.a };
+    if (d.tipo === 'monitores') mon = { buf: e.getBuffer(), l: d.l, a: d.a, miniL: d.miniL, miniA: d.miniA, miniMax: d.miniMax || 0, vez: 0 };
   });
   window.chrome.webview.addEventListener('message', e => {
     const m = e.data;
     if (m.tipo === 'quadro') desenharMonitores();
-    else if (m.tipo === 'estado') { Object.assign(E, m); renderCenas(); renderEfeitos(); if (typeof renderRoVivo === 'function') { renderRoVivo(); if (!document.activeElement?.closest('#roLista')) renderRoLista(); } }
+    else if (m.tipo === 'estado') { Object.assign(E, m); renderCenas(); renderEfeitos(); if (typeof camadasEstado === 'function') camadasEstado(); if (typeof renderRoVivo === 'function') { renderRoVivo(); if (!document.activeElement?.closest('#roLista')) renderRoLista(); } }
     else if (m.tipo === 'numeros') $('#numeros').textContent = `Saída ${E.saida || ''} · ${String(m.qps).replace('.', ',')} q/s · ${String(m.ms).replace('.', ',')} ms por quadro${m.atrasos ? ' · ' + m.atrasos + ' atrasos' : ''}`;
-    else if (m.tipo === 'versao') $('#versao').textContent = 'versão ' + m.versao;
-    else if (m.tipo === 'fontesNdi') preencherNdi(m.lista, m.erro);
+    else if (m.tipo === 'versao') { $('#versao').textContent = 'versão ' + m.versao; $('#splashVersao').textContent = 'Versão ' + m.versao; $('#sobreVersao').textContent = 'versão ' + m.versao; }
+    else if (m.tipo === 'fontesNdi') { preencherNdi(m.lista, m.erro); if (typeof cmNdi === 'function') cmNdi(m.lista, m.erro); }
+    else if (m.tipo === 'camadaImagem') cmImagem(m);
     else if (m.tipo === 'imagemEscolhida') $('#ncImagem').value = m.caminho;
     else if (m.tipo === 'videoEscolhido') $('#ncVideo').value = m.caminho;
     else if (m.tipo === 'transmissao') renderSaida(m);
@@ -56,7 +96,9 @@ if (NO_APP) {
     else if (m.tipo === 'capa') renderCapa(m);
     else if (m.tipo === 'inicio') renderInicio(m);
     else if (m.tipo === 'rede') renderRede(m);
-    else if (m.tipo === 'rtPessoas') renderPessoas(m);
+    else if (m.tipo === 'miguel') { splashMiguel(m); renderMiguel(m); }
+    else if (m.tipo === 'yt') renderYt(m);
+    else if (m.tipo === 'rtPessoas') { renderPessoas(m); PESSOAS = m.lista || []; if (!document.activeElement?.closest('#roLista')) renderRoLista(); }
     else if (m.tipo === 'sobre') { $('#soVersao').textContent = 'versão ' + m.versao; $('#soDados').textContent = m.dados; }
     else if (m.tipo === 'backupMsg') $('#bkMsg').textContent = m.msg;
     else if (m.tipo === 'inicioCk') renderInicioCk(m);
@@ -67,7 +109,7 @@ if (NO_APP) {
     else if (m.tipo === 'codificadores') { codTestados = m.lista; $('#ajCodInfo').textContent = m.lista.length ? 'Funcionam aqui: ' + m.lista.map(nomeCod).join(', ') : 'Nenhum codificador funcionou.'; renderCod(); }
     else if (m.tipo === 'aviso') { $('#avisoSaida').textContent = m.texto; setTimeout(() => $('#avisoSaida').textContent = '', 12000); }
   });
-  enviar({ tipo: 'pronto' }); enviar({ tipo: 'rotPedir' }); enviar({ tipo: 'camPedir' });
+  enviar({ tipo: 'pronto' }); enviar({ tipo: 'rotPedir' }); enviar({ tipo: 'camPedir' }); enviar({ tipo: 'rtPessoas' });
 }
 
 function desenharMonitores() {
@@ -75,24 +117,48 @@ function desenharMonitores() {
   const n = mon.l * mon.a * 4;
   ctxPv.putImageData(new ImageData(new Uint8ClampedArray(mon.buf, 0, n), mon.l, mon.a), 0, 0);
   ctxPg.putImageData(new ImageData(new Uint8ClampedArray(mon.buf, n, n), mon.l, mon.a), 0, 0);
+  if (E.miniaturas && ++mon.vez % 3 === 0) desenharMinis();      // miniaturas: 5 vezes por segundo bastam
+}
+// (0.1.9) miniatura ao vivo em cada cena (backlog 2.1): o programa escreve, depois dos monitores, uma por cena
+function desenharMinis() {
+  if (!mon?.miniMax || !E.miniaturas) return;
+  const base = mon.l * mon.a * 4 * 2, t = mon.miniL * mon.miniA * 4;
+  $$('#cenas canvas.mini').forEach(cv => {
+    const i = +cv.dataset.k; if (i >= mon.miniMax) return;
+    (cv._ctx ||= cv.getContext('2d')).putImageData(new ImageData(new Uint8ClampedArray(mon.buf, base + i * t, t), mon.miniL, mon.miniA), 0, 0);
+  });
 }
 
 // ---------- cenas ----------
-const nomeTipo = f => !f ? '' : f.startsWith('ndi:') ? '📷 ' + f.slice(4) : f.startsWith('imagem:') ? '🖼 ' + f.slice(7).split(/[\\/]/).pop() : f.startsWith('video:') ? '🎬 ' + f.slice(6).split(/[\\/]/).pop() : f.startsWith('cor:') ? '■ cor ' + f.slice(4) : f.startsWith('capa:') ? '✠ capa da live' + (f === 'capa:espera' ? ' · contagem' : '') : '▦ barras de teste';
+// (0.1.9) "web:1920x1080@100|https://www.site.org/placar" -> "site.org" (arquivo do computador -> nome do arquivo)
+function nomePagina(f) {
+  const u = f.slice(f.indexOf('|') + 1);
+  try { const x = new URL(u); return (x.protocol === 'file:' ? decodeURIComponent(x.pathname.split('/').pop()) : x.hostname.replace(/^www\./, '')).slice(0, 32); }
+  catch { return u.slice(0, 32); }
+}
+const nomeTipo = f => !f ? '' : f.startsWith('ndi:') ? (/\(MiguelAngelus Tel[aã]o\)$/i.test(f) ? '📺 telão · ' + f.slice(4).replace(/\s*\(.*$/, '') : '📷 ' + f.slice(4)) : f.startsWith('imagem:') ? '🖼 ' + f.slice(7).split(/[\\/]/).pop() : f.startsWith('video:') ? '🎬 ' + f.slice(6).split(/[\\/]/).pop() : f.startsWith('cor:') ? '■ cor ' + f.slice(4) : f.startsWith('capa:') ? '✠ capa da live' + (f === 'capa:espera' ? ' · contagem' : '') : f.startsWith('tela:') ? '🖥 monitor ' + f.slice(5) : f.startsWith('janela:') ? '🗔 ' + f.slice(7).split('|')[0] : f.startsWith('fundo:') ? '🎨 fundo' : f.startsWith('web:') ? '🌐 ' + nomePagina(f) : '▦ barras de teste';
 const corEstado = e => e === 'ok' || /^(pronto|tocando|terminou|preparando)/.test(e || '') ? 'var(--ok)' : e ? 'var(--av)' : 'var(--su)';
 
+// (0.1.3) arrastar a cena com o mouse para mudar a ordem (o estado que chega no meio do arrasto espera o fim)
+const ARR = { id: null, ativo: false, pos: -1, pendente: false, suprimir: false, fantasma: null, marca: null };
 function renderCenas() {
+  if (ARR.ativo) { ARR.pendente = true; return; }
   const cena = id => E.cenas.find(c => c.id === id);
   $('#nomePv').textContent = cena(E.preview)?.nome || '';
   $('#nomePg').textContent = (E.emTransicao ? '→ ' + (cena(E.para)?.nome || '') : cena(E.programa)?.nome) || '';
   $('#cenas').innerHTML = E.cenas.map((c, i) => `
-    <button class="cena ${c.id === E.preview ? 'pv' : ''} ${c.id === E.programa ? 'pg' : ''}" data-id="${esc(c.id)}" title="${esc(c.estado && c.estado !== 'ok' ? c.estado : '')}">
+    <button class="cena ${c.id === E.preview ? 'pv' : ''} ${c.id === E.programa ? 'pg' : ''} ${E.miniaturas ? 'com-mini' : ''}" data-id="${esc(c.id)}" title="${esc(c.estado && c.estado !== 'ok' ? c.estado : '')}">
+      ${E.miniaturas && i < (mon?.miniMax ?? 40) ? `<canvas class="mini" width="${mon?.miniL || 192}" height="${mon?.miniA || 108}" data-k="${i}"></canvas>` : ''}
       ${i < 9 ? `<span class="n">${i + 1}</span>` : ''}
       <b>${esc(c.nome)}</b>
-      <span class="tipo"><span class="dot" style="background:${corEstado(c.estado)}"></span>${esc(nomeTipo(c.fonte))}${c.fonte?.startsWith('video:') && c.estado ? ' · ' + esc(c.estado.replace(/^pronto · /, '')) : ''}</span>
-      <span class="acoes"><span data-acao="esq" title="Para a esquerda">◀</span><span data-acao="dir" title="Para a direita">▶</span><span data-acao="apagar" title="Apagar a cena">✕</span></span>
+      <span class="tipo"><span class="dot" style="background:${corEstado(c.estado)}"></span>${esc(nomeTipo(c.fonte))}${c.camadas?.length ? ' · ⧉ ' + c.camadas.length : ''}${c.fonte?.startsWith('video:') && c.estado ? ' · ' + esc(c.estado.replace(/^pronto · /, '')) : ''}</span>
+      <span class="acoes"><span data-acao="editar" title="Camadas: outra câmera, logo, selo…">✎</span><span data-acao="esq" title="Para a esquerda">◀</span><span data-acao="dir" title="Para a direita">▶</span><span data-acao="apagar" title="Apagar a cena">✕</span></span>
     </button>`).join('') + `<button class="cena nova-btn" id="btnNova">＋ Cena</button>`;
+  desenharMinis();
+  renderMiniAjuste();
 }
+function renderMiniAjuste() { const b = $('#apMini'); if (b) { b.textContent = E.miniaturas ? 'Ligado' : 'Desligado'; b.classList.toggle('ligado', !!E.miniaturas); } }
+$('#apMini').onclick = () => enviar({ tipo: 'miniaturas', on: !E.miniaturas });
 
 $('#cenas').addEventListener('click', e => {
   if (e.target.closest('#btnNova')) return abrirNova();
@@ -101,9 +167,97 @@ $('#cenas').addEventListener('click', e => {
   if (acao === 'apagar') {
     if (id === E.programa) return alert('A cena que está no programa não pode ser apagada.');
     if (confirm(`Apagar a cena "${E.cenas.find(c => c.id === id)?.nome}"?`)) enviar({ tipo: 'apagarCena', id });
-  } else if (acao === 'esq' || acao === 'dir') enviar({ tipo: 'mover', id, delta: acao === 'esq' ? -1 : 1 });
+  } else if (acao === 'editar') abrirCamadas(id);
+  else if (acao === 'esq' || acao === 'dir') enviar({ tipo: 'mover', id, delta: acao === 'esq' ? -1 : 1 });
   else enviar({ tipo: 'preview', id });
 });
+// (0.1.7) botão direito na cena: Duplicar, Camadas, Renomear, Apagar
+function fecharMenuCena() { $('#menuCena')?.remove(); }
+function apagarCenaPergunta(id) {
+  if (id === E.programa) return alert('A cena que está no programa não pode ser apagada.');
+  if (confirm(`Apagar a cena "${E.cenas.find(c => c.id === id)?.nome}"?`)) enviar({ tipo: 'apagarCena', id });
+}
+$('#cenas').addEventListener('contextmenu', e => {
+  const b = e.target.closest('.cena[data-id]'); if (!b) return;
+  e.preventDefault(); fecharMenuCena();
+  const id = b.dataset.id, c = E.cenas.find(k => k.id === id); if (!c) return;
+  const m = document.createElement('div'); m.id = 'menuCena'; m.className = 'menu-cena';
+  m.innerHTML = `<div class="mc-tit">${esc(c.nome)}</div>
+    <button data-m="duplicar">⧉ Duplicar cena</button>
+    <button data-m="camadas">✎ Camadas</button>
+    <button data-m="renomear">Aa Renomear</button>
+    <div class="mc-ren" hidden><input maxlength="60" value="${esc(c.nome)}"><button data-m="ok">OK</button></div>
+    <hr>
+    <button data-m="apagar" class="mc-perigo" ${id === E.programa ? 'disabled title="A cena no ar não pode ser apagada"' : ''}>✕ Apagar</button>`;
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(e.clientX, innerWidth - r.width - 8) + 'px';
+  m.style.top = Math.min(e.clientY, innerHeight - r.height - 8) + 'px';
+  const inp = m.querySelector('input');
+  const renomear = () => { const v = inp.value.trim(); if (v && v !== c.nome) enviar({ tipo: 'renomearCena', id, nome: v }); fecharMenuCena(); };
+  inp.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') renomear(); if (ev.key === 'Escape') fecharMenuCena(); });
+  m.addEventListener('pointerdown', ev => ev.stopPropagation());
+  m.addEventListener('click', ev => {
+    const a = ev.target.closest('[data-m]')?.dataset.m; if (!a) return;
+    if (a === 'duplicar') { enviar({ tipo: 'duplicarCena', id }); fecharMenuCena(); }
+    else if (a === 'camadas') { fecharMenuCena(); abrirCamadas(id); }
+    else if (a === 'renomear') { m.querySelector('.mc-ren').hidden = false; inp.focus(); inp.select(); }
+    else if (a === 'ok') renomear();
+    else if (a === 'apagar') { fecharMenuCena(); apagarCenaPergunta(id); }
+  });
+});
+window.addEventListener('pointerdown', fecharMenuCena);
+window.addEventListener('keydown', e => { if (e.key === 'Escape') fecharMenuCena(); });
+window.addEventListener('blur', fecharMenuCena);
+
+$('#cenas').addEventListener('pointerdown', e => {
+  const b = e.target.closest('.cena[data-id]');
+  if (!b || e.button !== 0 || e.target.closest('[data-acao]')) return;
+  Object.assign(ARR, { id: b.dataset.id, x0: e.clientX, y0: e.clientY, ativo: false, pos: -1, botao: b });
+});
+window.addEventListener('pointermove', e => {
+  if (!ARR.id) return;
+  if (!ARR.ativo) {
+    if (Math.hypot(e.clientX - ARR.x0, e.clientY - ARR.y0) < 8) return;       // um clique comum não vira arrasto
+    ARR.ativo = true;
+    const r = ARR.botao.getBoundingClientRect();
+    ARR.dx = ARR.x0 - r.left; ARR.dy = ARR.y0 - r.top;
+    ARR.fantasma = ARR.botao.cloneNode(true); ARR.fantasma.className += ' cena-fantasma'; ARR.fantasma.style.width = r.width + 'px';
+    ARR.marca = document.createElement('i'); ARR.marca.className = 'cena-marca';
+    document.body.append(ARR.fantasma, ARR.marca);
+    ARR.botao.classList.add('arrastando'); document.body.classList.add('arrastando-cena');
+  }
+  e.preventDefault();
+  Object.assign(ARR.fantasma.style, { left: e.clientX - ARR.dx + 'px', top: e.clientY - ARR.dy + 'px' });
+  // a cena mais perto do ponteiro; antes ou depois dela, conforme o lado
+  const bs = $$('#cenas .cena[data-id]');
+  let melhor = null, dist = Infinity;
+  bs.forEach((b, i) => {
+    const r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const d = Math.hypot((e.clientX - cx) / r.width, (e.clientY - cy) / r.height * 1.6);
+    if (d < dist) { dist = d; melhor = { i, r, depois: e.clientX > cx }; }
+  });
+  if (!melhor) return;
+  ARR.pos = melhor.i + (melhor.depois ? 1 : 0);
+  const x = melhor.depois ? melhor.r.right + 4 : melhor.r.left - 4;
+  Object.assign(ARR.marca.style, { left: x - 2 + 'px', top: melhor.r.top + 'px', height: melhor.r.height + 'px' });
+});
+function fimArrasto(e) {
+  if (!ARR.id) return;
+  const { id, ativo, pos } = ARR;
+  ARR.id = null;
+  if (!ativo) return;
+  ARR.ativo = false; ARR.suprimir = true; setTimeout(() => ARR.suprimir = false, 60);   // o clique que vem junto com o soltar não põe no preview
+  ARR.fantasma?.remove(); ARR.marca?.remove(); document.body.classList.remove('arrastando-cena');
+  const de = E.cenas.findIndex(c => c.id === id);
+  let para = pos > de ? pos - 1 : pos;
+  if (e?.type === 'pointerup' && de >= 0 && pos >= 0 && para !== de) enviar({ tipo: 'moverPara', id, pos: para });
+  ARR.pendente = false; renderCenas();
+}
+window.addEventListener('pointerup', fimArrasto);
+window.addEventListener('pointercancel', fimArrasto);
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && ARR.ativo) { ARR.pos = -1; fimArrasto(); } }, true);
+$('#cenas').addEventListener('click', e => { if (ARR.suprimir) { e.stopImmediatePropagation(); e.preventDefault(); ARR.suprimir = false; } }, true);
 $('#cenas').addEventListener('dblclick', e => {
   const b = e.target.closest('.cena[data-id]');
   if (b && !e.target.closest('[data-acao]')) enviar({ tipo: 'direto', id: b.dataset.id });
@@ -136,12 +290,26 @@ $('#btnFecharNova').onclick = () => $('#novaCena').hidden = true;
 $('#ncTipo').onchange = () => {
   $$('[data-nc]').forEach(el => el.hidden = el.dataset.nc !== $('#ncTipo').value);
   if ($('#ncTipo').value === 'ndi') enviar({ tipo: 'fontesNdi' });
+  if ($('#ncTipo').value === 'captura') pedirCapturas();
 };
+// (0.1.8) tela ou janela do computador
+function pedirCapturas() { $('#ncCaptura').innerHTML = '<option value="">procurando…</option>'; enviar({ tipo: 'capturas' }); }
+$('#btnCaptura').onclick = e => { e.preventDefault(); pedirCapturas(); };
+window.chrome?.webview?.addEventListener('message', ev => {
+  const m = ev.data; if (m?.tipo !== 'capturas') return;
+  const op = l => l.map(x => `<option value="${esc(x.spec)}">${esc(x.nome)}</option>`).join('');
+  $('#ncCaptura').innerHTML = `<optgroup label="Monitor inteiro">${op(m.monitores || [])}</optgroup>` +
+    (m.janelas?.length ? `<optgroup label="Uma janela (mesmo coberta por outras; não pode estar minimizada)">${op(m.janelas)}</optgroup>` : '');
+});
 $('#btnNdi').onclick = e => { e.preventDefault(); $('#ncNdi').innerHTML = '<option>procurando…</option>'; enviar({ tipo: 'fontesNdi' }); };
 $('#btnImagem').onclick = e => { e.preventDefault(); enviar({ tipo: 'escolherImagem' }); };
 $('#btnVideo').onclick = e => { e.preventDefault(); enviar({ tipo: 'escolherVideo' }); };
+// (0.1.9) o telão inteiro do MiguelAngelus (1.8.5: "MiguelAngelus Telão") vem primeiro, com nome claro
+const ehTelao = n => /\(MiguelAngelus Tel[aã]o\)$/i.test(n || '');
+const nomeNdi = n => ehTelao(n) ? '📺 Telão do MiguelAngelus — ' + n.replace(/\s*\(.*$/, '') : n;
 function preencherNdi(lista, erro) {
-  $('#ncNdi').innerHTML = lista.length ? lista.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
+  lista = [...lista].sort((a, b) => ehTelao(b) - ehTelao(a));
+  $('#ncNdi').innerHTML = lista.length ? lista.map(n => `<option value="${esc(n)}">${esc(nomeNdi(n))}</option>`).join('')
     : `<option value="">${esc(erro || 'Nenhuma fonte NDI na rede ainda (↻ para procurar de novo)')}</option>`;
 }
 $('#btnCriar').onclick = () => {
@@ -150,7 +318,15 @@ $('#btnCriar').onclick = () => {
   else if (tipo === 'imagem') { if (!$('#ncImagem').value) return $('#ncErro').textContent = 'Escolha a imagem.'; fonte = 'imagem:' + $('#ncImagem').value; }
   else if (tipo === 'video') { if (!$('#ncVideo').value) return $('#ncErro').textContent = 'Escolha o vídeo.'; fonte = 'video:' + $('#ncVideo').value; }
   else if (tipo === 'cor') fonte = 'cor:' + $('#ncCor').value;
-  const nome = $('#ncNome').value.trim() || (tipo === 'ndi' ? $('#ncNdi').value : tipo === 'cor' ? 'Cor' : tipo === 'imagem' ? $('#ncImagem').value.split(/[\\/]/).pop() : tipo === 'video' ? $('#ncVideo').value.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') : 'Barras');
+  else if (tipo === 'captura') { if (!$('#ncCaptura').value) return $('#ncErro').textContent = 'Escolha o monitor ou a janela.'; fonte = $('#ncCaptura').value; }
+  else if (tipo === 'web') {
+    let u = $('#ncWeb').value.trim(); if (!u) return $('#ncErro').textContent = 'Digite o endereço da página.';
+    if (!/^[a-z]+:/i.test(u)) u = 'https://' + u;
+    fonte = 'web:' + $('#ncWebTam').value + '@' + $('#ncWebZoom').value + '|' + u;
+    if (!$('#ncNome').value.trim()) $('#ncNome').value = nomePagina('|' + u) || 'Página';
+  }
+  const capNome = () => { const t = $('#ncCaptura').selectedOptions[0]?.textContent || 'Tela'; return t.replace(/\s+\(.*\)$/, '').replace(/ · .*$/, '').slice(0, 40); };
+  const nome = $('#ncNome').value.trim() || (tipo === 'captura' ? capNome() : tipo === 'ndi' ? (ehTelao($('#ncNdi').value) ? 'Telão do MiguelAngelus' : $('#ncNdi').value) : tipo === 'cor' ? 'Cor' : tipo === 'imagem' ? $('#ncImagem').value.split(/[\\/]/).pop() : tipo === 'video' ? $('#ncVideo').value.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') : 'Barras');
   enviar({ tipo: 'novaCena', nome, fonte, preencher: $('#ncAjuste').value === 'preencher' });
   $('#novaCena').hidden = true; $('#ncNome').value = '';
 };
@@ -182,7 +358,9 @@ $('#btnAr').onclick = () => {
   if (S.aoVivo) { if (confirm('ENCERRAR a transmissão em todas as plataformas?')) enviar({ tipo: 'transmitir', ligar: false }); return; }
   const lig = (SC?.destinos || []).filter(d => d.ligado).map(d => d.nome);
   if (!lig.length) return $('#avisoSaida').textContent = 'Nenhum destino ligado. Ligue em Ajustes › Transmissão.';
-  if (confirm('Iniciar a transmissão para: ' + lig.join(', ') + '?')) enviar({ tipo: 'transmitir', ligar: true });
+  const yt = YT.conectado && YT.daHora?.doCast && !YT.daHora.autoInicio && lig.includes('YouTube')
+    ? '\n\nYouTube: o sinal chega em TESTE (só vocês veem a prévia no Studio). Para pôr no ar, use "Entrar ao vivo no YouTube".' : '';
+  if (confirm('Iniciar a transmissão para: ' + lig.join(', ') + '?' + yt)) enviar({ tipo: 'transmitir', ligar: true });
 };
 
 function renderAjSaida(m) {
@@ -245,6 +423,8 @@ function renderNivel(m) {
   const nivTxt = m.estado === 'ok' ? niv : ''; $('#somNiv').textContent = nivTxt; $('#smNiv').textContent = nivTxt;
   $('#btnMudo').classList.toggle('on', m.mudo); $('#btnMudo').textContent = m.mudo ? 'MUDO (clique para voltar)' : 'Mudo';
   S.mudo = m.mudo;
+  // (0.1.7) o som que a cena do ar pede
+  const sc = $('#somCena'); sc.textContent = m.cenaSom ? '🔊 ' + m.cenaSom : ''; sc.classList.toggle('erro', !!m.cenaMuda); sc.classList.toggle('dica', !m.cenaMuda);
 }
 $('#btnMudo').onclick = () => enviar({ tipo: 'mudo', ligado: !S.mudo });
 
@@ -353,6 +533,7 @@ function abrirSecao(sec) {
   if (sec === 'cameras') { enviar({ tipo: 'camPedir' }); }
   if (sec === 'capa') enviar({ tipo: 'capaPedir', modo: CP.modo });
   if (sec === 'rede' || sec === 'miguel') enviar({ tipo: 'redePedir' });
+  if (sec === 'transmissao') enviar({ tipo: 'ytPedir' });
   if (sec === 'backup') enviar({ tipo: 'sobrePedir' });
   if (sec === 'aparencia') renderAparencia();
   try { localStorage.setItem('cast.secAj', sec); } catch {}
@@ -469,16 +650,38 @@ function renderRoteiro(m) {
   $('#roAlterado').textContent = RO.alterado ? '· alterações não salvas' : '';
   $('#roPerfis').innerHTML = RO.perfis.map(p => `<button class="mo ${p.id === RO.perfil ? 'sel' : ''}" data-perfil="${esc(p.id)}"><span>${esc(p.nome)}<small>${p.modelo ? 'modelo do Cast' : 'meu perfil'} · ${p.n} momentos</small></span></button>`).join('');
   if (!document.activeElement?.closest('#roLista')) renderRoLista();
+  renderRoSeguir();
   renderRoVivo();
 }
+// (0.1.9) seguir o telão do MiguelAngelus
+function renderRoSeguir() {
+  $('#roSeguir').checked = !!RO.seguir;
+  $('#roAntes').value = String(RO.antes || 2);
+  $('#roSeguirTxt').textContent = RO.seguir ? (RO.seguirTexto || 'procurando o MiguelAngelus…') : '';
+  const mg = RO.seguir ? RO.miguel : null;
+  $('#roMapaBox').hidden = !mg?.itens?.length;
+  if (mg?.itens) $('#roMapa').innerHTML = (mg.roteiro ? `<div class="dica"><b>${esc(mg.roteiro)}</b></div>` : '') + mg.itens.map((it, k) =>
+    `<div class="${k === mg.vivo ? 'vivo' : ''}"><span>${esc(it.txt)}</span><span>${it.m >= 0 ? '→ ' + esc(RO.lista[it.m]?.Nome || '?') : '<i>— fica no momento anterior</i>'}</span></div>`).join('');
+}
+$('#roSeguir').onchange = e => enviar({ tipo: 'rotSeguir', on: e.target.checked });
+$('#roAntes').onchange = e => enviar({ tipo: 'rotAntes', n: +e.target.value });
 function opcoesCenas(sel) {
   return '<option value="">— escolha a cena —</option>' + E.cenas.filter(c => !c.fonte?.startsWith('video:')).map(c => `<option value="${esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${esc(c.nome)}</option>`).join('');
 }
-function opcoesCam(sel) { return '<option value="">— câmera —</option>' + CAM.lista.map(c => `<option value="${esc(c.Id)}" ${c.Id === sel ? 'selected' : ''}>${esc(c.Nome)}</option>`).join(''); }
+function opcoesCam(sel) { return '<option value="">— a da cena —</option>' + CAM.lista.map(c => `<option value="${esc(c.Id)}" ${c.Id === sel ? 'selected' : ''}>${esc(c.Nome)}</option>`).join(''); }
 function opcoesPos(camId, sel) {
-  const c = CAM.lista.find(x => x.Id === camId); if (!c) return '<option value="-1">—</option>';
-  return '<option value="-1">— posição —</option>' + c.Posicoes.slice().sort((a, b) => a.N - b.N).map(p => `<option value="${p.N}" ${p.N === sel ? 'selected' : ''}>${esc(p.Nome)}</option>`).join('');
+  const c = CAM.lista.find(x => x.Id === camId); if (!c) return '<option value="-1">— a salva na cena —</option>';
+  return '<option value="-1">— a salva na cena —</option>' + c.Posicoes.slice().sort((a, b) => a.N - b.N).map(p => `<option value="${p.N}" ${p.N === sel ? 'selected' : ''}>${esc(p.Nome)}</option>`).join('');
 }
+// (0.1.9) pessoa do seguir/achar: os cadastros guardados (aba Câmera que segue)
+let PESSOAS = [];
+function opcoesPessoa(sel, tipo) {
+  const vazio = tipo === 'achar' ? '— o maior rosto —' : '— o rosto em uso —';
+  const falta = sel && !PESSOAS.some(p => p.id === sel) ? `<option value="${esc(sel)}" selected>(cadastro apagado)</option>` : '';
+  return `<option value="">${vazio}</option>` + falta + PESSOAS.map(p => `<option value="${esc(p.id)}" ${p.id === sel ? 'selected' : ''}>${esc(p.nome)}${p.funcao ? ' · ' + esc(p.funcao) : ''}</option>`).join('');
+}
+const selPessoa = (o, tipo) => tipo === 'seguir' || tipo === 'achar'
+  ? `<select data-c="Pessoa" title="${tipo === 'achar' ? 'Quem procurar na posição (vazio = centraliza o maior rosto)' : 'Quem seguir (vazio = o rosto em uso na aba Câmera que segue)'}">${opcoesPessoa(o.Pessoa, tipo)}</select>` : '';
 function renderRoLista() {
   $('#roLista').innerHTML = RO.lista.map((m, i) => {
     const acoes = `<span class="acoes"><button data-a="sobe" title="Subir">▲</button><button data-a="desce" title="Descer">▼</button><button data-a="tira" title="Tirar do roteiro">✕</button></span>`;
@@ -487,11 +690,19 @@ function renderRoLista() {
       <span class="campos"><button class="peq" data-a="arquivo" title="${esc(m.Video)}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🎬 ${esc(arquivoDe(m.Video) || 'escolher arquivo…')}</button></span>
       <span class="campos"><button class="peq" data-a="segue" style="flex:1">${m.Segue ? 'Ao acabar: segue sozinho' : 'Ao acabar: espera'}</button></span>${acoes}</div>`;
     const comCam = m.Tipo !== 'sem';
-    return `<div class="rolinha ${i === RO.agora ? 'agora' : ''}" data-i="${i}">
+    // (0.1.9) outras cenas/câmeras do mesmo momento (o Cast usa a de câmera livre) e o nome no MiguelAngelus
+    const outras = (m.Outras || []).map((o, k) => `<div class="rolinha ro-ou" data-i="${i}" data-o="${k}">
+      <span></span><span class="dica" style="text-align:right">ou, se a câmera de cima estiver no ar:</span><span></span>
+      <select data-c="Cena">${opcoesCenas(o.Cena)}</select>
+      <span class="campos">${comCam ? `<select data-c="Camera">${opcoesCam(o.Camera)}</select><select data-c="Posicao">${opcoesPos(o.Camera, o.Posicao)}</select>${selPessoa(o, m.Tipo)}` : ''}</span>
+      <span class="acoes"><button data-a="sobeOutra" title="Passar esta câmera na frente (o Cast tenta primeiro a de cima)">▲</button><button data-a="desceOutra" title="Deixar esta câmera para depois" ${k === m.Outras.length - 1 ? 'disabled' : ''}>▼</button><button data-a="tiraOutra" title="Tirar esta opção">✕</button></span></div>`).join('');
+    const extra = `<div class="ro-extra" data-i="${i}">${comCam ? `<button class="peq" data-a="outra" title="Outra cena (outra câmera) para este momento: o Cast escolhe a que não está no ar">+ outra câmera</button>` : ''}
+      ${RO.seguir ? `<label class="dica">No MiguelAngelus: <input data-c="Miguel" value="${esc(m.Miguel || '')}" placeholder="automático (pelo nome)" title="Como este momento aparece no roteiro do MiguelAngelus, separado por vírgulas (ex.: Glória, Hino de louvor). Vazio = pelo nome do momento."></label>` : ''}</div>`;
+    return `<div class="romomento ${i === RO.preparado ? 'prep' : ''}"><div class="rolinha ${i === RO.agora ? 'agora' : ''}" data-i="${i}">
       <span class="n">${i + 1}</span><input data-c="Nome" value="${esc(m.Nome)}">
       <button class="tpb tp t-${m.Tipo}" data-a="tipo" title="Clique para trocar o tipo">${NOME_TIPO[m.Tipo]}</button>
       <select data-c="Cena">${opcoesCenas(m.Cena)}</select>
-      <span class="campos">${comCam ? `<select data-c="Camera">${opcoesCam(m.Camera)}</select><select data-c="Posicao">${opcoesPos(m.Camera, m.Posicao)}</select>` : '<span class="dica">—</span>'}</span>${acoes}</div>`;
+      <span class="campos">${comCam ? `<select data-c="Camera">${opcoesCam(m.Camera)}</select><select data-c="Posicao">${opcoesPos(m.Camera, m.Posicao)}</select>${selPessoa(m, m.Tipo)}` : '<span class="dica">—</span>'}</span>${acoes}</div>${outras}${extra}</div>`;
   }).join('') || '<p class="dica">Nenhum momento. Use "+ Momento".</p>';
 }
 const roMexe = f => { const l = JSON.parse(JSON.stringify(RO.lista)); f(l); RO.lista = l; RO.alterado = true; renderRoLista(); $('#roAlterado').textContent = '· alterações não salvas'; enviar({ tipo: 'rotEditar', lista: l }); };
@@ -504,13 +715,32 @@ $('#roLista').addEventListener('click', e => {
   else if (a === 'tira' && confirm(`Tirar "${RO.lista[i].Nome}" do roteiro?`)) roMexe(l => l.splice(i, 1));
   else if (a === 'segue') roMexe(l => { l[i].Segue = !l[i].Segue; });
   else if (a === 'arquivo') enviar({ tipo: 'rotVideo', i });
+  // (0.1.9) outra câmera: sugere a próxima câmera cadastrada que ainda não está neste momento
+  else if (a === 'outra') roMexe(l => {
+    const usadas = [l[i].Camera, ...(l[i].Outras || []).map(o => o.Camera)];
+    const cam = CAM.lista.find(c => !usadas.includes(c.Id))?.Id || '';
+    (l[i].Outras ||= []).push({ Cena: '', Camera: cam, Posicao: -1 });
+  });
+  else if (a === 'tiraOutra') roMexe(l => l[i].Outras.splice(+row.dataset.o, 1));
+  // (0.1.9) ordem das câmeras do momento: a de cima é a primeira tentada (a linha principal conta como a primeira)
+  else if (a === 'sobeOutra' || a === 'desceOutra') roMexe(l => {
+    const m = l[i], k = +row.dataset.o + 1, j = a === 'sobeOutra' ? k - 1 : k + 1;
+    const ops = [{ Cena: m.Cena, Camera: m.Camera, Posicao: m.Posicao }, ...m.Outras];
+    if (j < 0 || j >= ops.length) return;
+    [ops[k], ops[j]] = [ops[j], ops[k]];
+    Object.assign(m, ops[0]); m.Outras = ops.slice(1);
+  });
 });
 $('#roLista').addEventListener('change', e => {
   const c = e.target.dataset.c, row = e.target.closest('[data-i]'); if (!c || !row) return;
-  const i = +row.dataset.i, v = e.target.value;
-  roMexe(l => { if (c === 'Posicao') l[i].Posicao = +v; else l[i][c] = v; if (c === 'Camera') l[i].Posicao = -1; });
+  const i = +row.dataset.i, v = e.target.value, o = row.dataset.o;
+  roMexe(l => {
+    const alvo = o !== undefined ? l[i].Outras[+o] : l[i];
+    if (c === 'Posicao') alvo.Posicao = +v; else alvo[c] = v;
+    if (c === 'Camera') alvo.Posicao = -1;
+  });
 });
-$('#roMais').onclick = () => roMexe(l => l.push({ Nome: 'Momento', Tipo: 'fixo', Cena: '', Camera: CAM.lista[0]?.Id || '', Posicao: -1, Video: '', Segue: true }));
+$('#roMais').onclick = () => roMexe(l => l.push({ Nome: 'Momento', Tipo: 'fixo', Cena: '', Camera: '', Posicao: -1, Video: '', Segue: true }));
 $('#roVideoIni').onclick = () => enviar({ tipo: 'rotVideo', i: -1, noFim: false });
 $('#roVideoFim').onclick = () => enviar({ tipo: 'rotVideo', i: -1, noFim: true });
 function videoEscolhido(m) {
@@ -537,8 +767,10 @@ function renderRoVivo() {
   const prox = RO.lista[RO.agora + 1];
   $('#rvLista').innerHTML = RO.lista.map((m, i) => {
     const cena = m.Tipo === 'video' ? arquivoDe(m.Video) : (E.cenas.find(c => c.id === m.Cena)?.nome || '— sem cena —');
-    return `<button class="mo ${i < RO.agora ? 'feito' : ''} ${i === RO.agora ? 'agora' : ''}" data-ir="${i}">${esc(m.Nome)} <span class="tp t-${m.Tipo}">${NOME_TIPO[m.Tipo]}</span><span class="dir">${esc(cena)}</span></button>`;
+    return `<button class="mo ${i < RO.agora ? 'feito' : ''} ${i === RO.agora ? 'agora' : ''} ${i === RO.preparado ? 'prep' : ''}" data-ir="${i}" ${i === RO.preparado ? 'title="Preparado no Preview: aperte Transição"' : ''}>${esc(m.Nome)} <span class="tp t-${m.Tipo}">${NOME_TIPO[m.Tipo]}</span>${i === RO.preparado ? '<span class="tp t-prep">no Preview</span>' : ''}<span class="dir">${esc(cena)}</span></button>`;
   }).join('');
+  $('#rvSeguir').hidden = !RO.seguir;
+  $('#rvSeguir').textContent = RO.seguir ? '🔗 ' + (RO.seguirTexto || 'procurando o MiguelAngelus…') : '';
   $('#rvProximo').textContent = prox ? 'Próximo momento: ' + prox.Nome : (RO.agora >= 0 ? 'Fim do roteiro' : 'Próximo momento');
   $('#rvProximo').disabled = !prox;
   $('#rvAviso').textContent = RO.aviso || '';
@@ -577,6 +809,7 @@ function renderCapa(m) {
   const c = m.cfg, foco = document.activeElement;
   for (const [id, k] of Object.entries(CP_CAMPOS)) if (foco !== $('#' + id)) $('#' + id).value = c[k] || '';
   if (foco !== $('#cpQuando')) $('#cpQuando').value = (c.Quando || '').slice(0, 16);
+  $('#cpQuandoMi').textContent = c.SeguirMiguel ? '· pela agenda do MiguelAngelus, quando ele estiver na rede' : '';
   $('#cpCelAuto').textContent = '· do calendário: ' + m.celebracaoAuto;
   $('#cpCelebracao').placeholder = m.celebracaoAuto;
   $$('#cpModelos [data-mod]').forEach(b => b.classList.toggle('ligado', b.dataset.mod === c.Modelo));
@@ -617,7 +850,77 @@ $('#cpCenas').onclick = () => enviar({ tipo: 'capaCenas', modo: CP.modo });
 
 // ---------- início ----------
 const IN = {};
-function pedirInicio() { enviar({ tipo: 'inicioPedir' }); enviar({ tipo: 'capaMini' }); }
+function pedirInicio() { enviar({ tipo: 'inicioPedir' }); enviar({ tipo: 'capaMini' }); enviar({ tipo: 'miguelPedir' }); enviar({ tipo: 'ytPedir' }); }
+
+// ---------- YouTube (0.0.8) ----------
+const YT = {};
+const PRIV = { public: 'pública', unlisted: 'não listada', private: 'privada' };
+function renderYt(m) {
+  Object.assign(YT, m);
+  $('#ytCanal').textContent = m.conectado ? '● ' + m.canal : m.temCliente ? 'não conectado' : 'falta o ID do cliente';
+  $('#ytCanal').style.color = m.conectado ? 'var(--ok)' : '';
+  $('#ytConectar').textContent = m.conectado ? 'Conectar de novo' : 'Conectar';
+  $('#ytConectar').disabled = !m.temCliente || m.ocupado;
+  $('#ytDesconectar').hidden = !m.conectado;
+  if (m.msg) { $('#ytMsg').textContent = m.msg; clearTimeout(YT.tMsg); YT.tMsg = setTimeout(() => $('#ytMsg').textContent = '', 15000); }
+  // Início
+  const r = $('#inYtR'), dh = m.daHora;
+  if (!m.conectado) r.innerHTML = '<span class="dica">conecte a conta em Ajustes › Transmissão</span>';
+  else if (m.ocupado) r.innerHTML = `<span class="dica">${esc(m.msg || 'consultando o YouTube…')}</span>`;
+  else if (dh && !dh.doCast) r.innerHTML = `<span class="dica" title="${esc(dh.titulo)}">há uma live nessa hora criada fora do Cast (OBS/Studio), com outra chave</span> <button class="peq" data-yt="link">Abrir</button> <button class="peq prim" data-yt="novo">Agendar pelo Cast</button>`;
+  else if (dh) r.innerHTML = `<span title="${esc(dh.titulo)}">✓ ${dh.estado === 'live' ? '<b style="color:var(--vivo,#e33)">no ar</b>' : dh.estado === 'testing' ? '<b style="color:var(--ok)">em teste</b>' : 'agendada'} · ${esc(PRIV[dh.privacidade] || dh.privacidade)}</span>
+      <button class="peq" data-yt="link" title="${esc(dh.link)}">Abrir</button><button class="peq" data-yt="copiar">Copiar link</button><button class="peq" data-yt="capa" title="Envia a capa atual como miniatura desta live">Trocar a miniatura</button>`;
+  else r.innerHTML = `<span class="dica">nenhuma live para ${esc(m.quandoTxt)}</span> <button class="peq prim" data-yt="novo">Agendar no YouTube</button>`;
+  if (m.msg && !m.ocupado && /^YouTube:/.test(m.msg)) r.insertAdjacentHTML('beforeend', `<div class="erro" style="width:100%">${esc(m.msg)}</div>`);
+  if (m.msg && !m.ocupado && dh && /^Live criada|^A live foi criada|^Miniatura/.test(m.msg)) r.insertAdjacentHTML('beforeend', `<div class="dica" style="width:100%">${esc(m.msg)}</div>`);
+  if (dh?.doCast) $('#inYtCriar').hidden = true;
+  renderYtVivo();
+}
+// (0.1.0) faixa do Ao vivo: sinal em teste → Entrar ao vivo
+function renderYtVivo() {
+  const dh = YT.daHora, f = YT.fase || '', est = dh?.estado || '';
+  const mostrar = YT.conectado && dh && dh.doCast && (YT.aoVivoCast || f || est === 'live' || est === 'testing');
+  $('#ytVivo').hidden = !mostrar; if (!mostrar) return;
+  const noAr = est === 'live' || est === 'liveStarting' || f === 'no ar';
+  const teste = !noAr && (est === 'testing' || f === 'em teste');
+  $('#ytVivoDot').style.background = noAr ? 'var(--vivo)' : teste ? 'var(--ok)' : 'var(--av, #e0a800)';
+  $('#ytVivoTxt').innerHTML = noAr ? '<b>YouTube: AO VIVO</b> · ' + esc(PRIV[dh.privacidade] || '') + ' · termina quando você encerrar a transmissão'
+    : teste ? '<b>YouTube: em teste</b> · o sinal está chegando; só vocês veem a prévia no Studio. Ninguém de fora vê ainda.'
+    : !YT.aoVivoCast ? 'YouTube: live agendada, esperando você iniciar a transmissão'
+    : 'YouTube: ' + esc(f || 'preparando…');
+  $('#ytVivoBtn').hidden = noAr;
+  $('#ytVivoBtn').disabled = !YT.aoVivoCast || !!f && !teste;
+}
+$('#ytVivoStudio').onclick = () => YT.daHora && enviar({ tipo: 'ytAbrir', url: YT.daHora.studio });
+$('#ytVivoBtn').onclick = () => {
+  const dh = YT.daHora; if (!dh) return;
+  if (confirm(`ENTRAR AO VIVO no YouTube agora?\n\n"${dh.titulo}" (${PRIV[dh.privacidade] || dh.privacidade})\n\nQuem tem o link (ou o canal, se for pública) passa a ver.`)) enviar({ tipo: 'ytAoVivo', id: dh.id });
+};
+$('#ytCliente').onclick = () => enviar({ tipo: 'ytCliente' });
+$('#ytConectar').onclick = () => enviar({ tipo: 'ytConectar' });
+$('#ytDesconectar').onclick = () => { if (confirm('Desconectar o Cast da conta do YouTube? As lives já criadas continuam lá.')) enviar({ tipo: 'ytDesconectar' }); };
+$('#inYtR').addEventListener('click', e => {
+  const b = e.target.closest('[data-yt]'); if (!b) return; const dh = YT.daHora;
+  if (b.dataset.yt === 'novo') {
+    $('#ytTitulo').value = YT.tituloPadrao; $('#ytDescricao').value = YT.descricao || ''; $('#ytDescricao').placeholder = YT.descricaoPadrao;
+    $('#ytPrivacidade').value = YT.privacidade || 'public'; $('#ytQuando').textContent = 'Começa ' + YT.quandoTxt + ' · capa como miniatura';
+    $('#inYtCriar').hidden = false; $('#ytTitulo').focus();
+  }
+  else if (b.dataset.yt === 'link' && dh) enviar({ tipo: 'ytAbrir', url: dh.link });
+  else if (b.dataset.yt === 'copiar' && dh) navigator.clipboard.writeText(dh.link).then(() => { b.textContent = 'Copiado ✓'; setTimeout(() => b.textContent = 'Copiar link', 2000); });
+  else if (b.dataset.yt === 'capa' && dh) { if (confirm('Trocar a miniatura desta live pela capa atual?')) enviar({ tipo: 'ytMiniatura', id: dh.id }); }
+});
+$('#ytCancelar').onclick = () => $('#inYtCriar').hidden = true;
+$('#ytPrivacidade').onchange = () => enviar({ tipo: 'ytCfg', privacidade: $('#ytPrivacidade').value });
+$('#ytDescricao').addEventListener('change', () => enviar({ tipo: 'ytCfg', descricao: $('#ytDescricao').value }));
+$('#ytCriarOk').onclick = () => {
+  const t = $('#ytTitulo').value.trim(); if (!t) return $('#ytTitulo').focus();
+  const pv = PRIV[$('#ytPrivacidade').value];
+  if (!confirm(`Criar no YouTube uma live ${pv}:\n\n"${t}"\n${YT.quandoTxt}\n\nA capa vai como miniatura e o destino YouTube do Cast passa a usar a chave desta live.`)) return;
+  enviar({ tipo: 'ytCfg', privacidade: $('#ytPrivacidade').value, descricao: $('#ytDescricao').value });
+  enviar({ tipo: 'ytCriar', titulo: t });
+  $('#inYtCriar').hidden = true;
+};
 function renderInicio(m) {
   Object.assign(IN, m);
   $('#inTitulo').textContent = m.titulo || 'Santa Missa';
@@ -698,6 +1001,34 @@ function renderRede(m) {
     ? mi.map(n => `<div class="ck"><span class="dot" style="background:var(--ok)"></span>${esc(n.replace(/\s*\(.*\)$/, ''))}<span class="r">${esc((/\((.*)\)/.exec(n) || [])[1] || '')} · imagem NDI disponível</span></div>`).join('')
     : '<p class="dica">Nenhum MiguelAngelus mandando imagem NDI na rede agora. Abra o MiguelAngelus com a faixa de letras (NDI) ligada.</p>';
 }
+// (0.0.5) agenda do MiguelAngelus
+const MI = {};
+function renderMiguel(m) {
+  Object.assign(MI, m);
+  $('#miAgStatus').innerHTML = m.erro ? esc(m.erro)
+    : `<span style="color:var(--ok)">●</span> ${esc(m.paroquia || 'MiguelAngelus')} · ${m.origem === '127.0.0.1' ? 'neste computador' : esc(m.origem)} · ${m.total} celebração(ões) nas próximas 2 semanas · lido às ${esc(m.lido)}`;
+  $('#miSeguir').textContent = m.seguir ? 'Ligado' : 'Desligado'; $('#miSeguir').classList.toggle('ligado', m.seguir);
+  $('#miSoMissas').textContent = m.soMissas ? 'Ligado' : 'Desligado'; $('#miSoMissas').classList.toggle('ligado', m.soMissas);
+  $('#miFolheto').textContent = m.folheto ? 'Ligado' : 'Desligado'; $('#miFolheto').classList.toggle('ligado', m.folheto);
+  $('#miMarcas').textContent = m.marcas ? 'Ligado' : 'Desligado'; $('#miMarcas').classList.toggle('ligado', m.marcas);
+  if (document.activeElement !== $('#miLocal'))
+    $('#miLocal').innerHTML = '<option value="">Todas</option>' + m.locais.filter(l => l.sigla || l.nome)
+      .map(l => `<option value="${esc(l.sigla || l.nome)}" ${(l.sigla || l.nome) === m.local ? 'selected' : ''}>${esc(l.sigla ? `${l.sigla} · ${l.nome}` : l.nome)}</option>`).join('');
+  $('#miProximas').innerHTML = m.erro ? '' : m.proximas.length
+    ? m.proximas.map((x, i) => `<div class="ck">${i === 0 ? '<b>' : ''}${esc(x.quandoTxt)}${i === 0 ? '</b> <span class="dica">· na capa</span>' : i === 1 ? ' <span class="dica">· "Próxima Missa"</span>' : ''}<span class="r">${esc(x.nome || '')}${x.roteiro ? ' · roteiro pronto' : ''}</span></div>`).join('')
+    : '<p class="dica" style="margin:0">Nenhuma celebração com esses filtros nas próximas 2 semanas.</p>';
+  // Início › Depois: as seguintes (a primeira já é a "Próxima celebração" lá em cima)
+  const dep = !m.erro && m.seguir ? m.proximas.slice(1, 5) : [];
+  $('#inProximas').innerHTML = dep.map(x => `<div class="ck">${esc(x.quandoTxt)}<span class="r">${esc(x.nome || '')}${x.roteiro ? ' · roteiro pronto' : ''}</span></div>`).join('');
+  $('#inProximasSem').hidden = dep.length > 0;
+}
+const miCfg = mudar => enviar({ tipo: 'miguelCfg', ...mudar });     // só o que mudou
+$('#miSeguir').onclick = () => miCfg({ seguir: !MI.seguir });
+$('#miSoMissas').onclick = () => miCfg({ soMissas: !MI.soMissas });
+$('#miFolheto').onclick = () => miCfg({ folheto: !MI.folheto });
+$('#miMarcas').onclick = () => miCfg({ marcas: !MI.marcas });
+$('#miLocal').onchange = e => miCfg({ local: e.target.value });
+$('#miAgAtualizar').onclick = () => { $('#miAgStatus').textContent = 'Buscando…'; enviar({ tipo: 'miguelPedir' }); };
 $('#redeAtualizar').onclick = () => enviar({ tipo: 'redePedir' });
 $('#miAtualizar').onclick = () => enviar({ tipo: 'redePedir' });
 $('#redeInternet').onclick = () => { $('#redeNet').innerHTML = '<p class="dica">Testando…</p>'; enviar({ tipo: 'redePedir', internet: true }); };
