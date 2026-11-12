@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+.vs/
+# telemetria do kit de rastreio (pode ter dados da igreja: vai por pen drive/e-mail, nunca pelo GitHub)
+telemetria/
+*.zip
+# chaves e autorizações das plataformas nunca entram no repositório
+*.dat
+segredos*
+# FFmpeg (LGPL) é baixado à parte: veja README
+programa/ffmpeg/
