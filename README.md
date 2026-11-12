@@ -15,6 +15,12 @@ Funciona junto com o MiguelAngelus ou sozinho.
 | **0.0.1** (em construção) | Mesa de corte: cenas (câmera NDI, imagem, cor, barras de teste), preview e programa, transições (corte, esmaecer, virar página) · **gravar e transmitir** para YouTube, Facebook e Instagram ao mesmo tempo (codifica uma vez; se um destino cai, só ele reconecta) |
 | próximas da v0 | som (limitador, atraso, mesa abaixa nos vídeos) · roteiro e perfis de celebração · capa da live · criar as lives no YouTube · celular |
 | 0.1 | câmera PTZ **seguindo o celebrante** (rosto cadastrado com autorização) — testes em `kit-rastreio/` |
+| **0.1.9** | cenas com camadas, som por cena, tela/janela e página da internet · **telão inteiro do MiguelAngelus** por NDI · roteiro que **segue o MiguelAngelus** (prepara a próxima cena faltando N slides, câmera livre prepara) · seguir/achar uma **pessoa cadastrada** por momento · fundos temáticos · miniaturas ao vivo · Stream Dock com retorno nas teclas |
+| **0.1.10** | **posição da câmera PTZ salva na cena** (o Cast lê as coordenadas da câmera e guarda na cena, nada é gravado na câmera) · cena no Preview já leva a câmera livre para a posição · chamar a posição pelo Stream Deck · achar/seguir uma pessoa a partir da posição da cena · o momento do roteiro vale mais que a cena |
+
+## Baixar
+
+O programa pronto (assinado) fica em **Releases**: baixe o `.zip`, descompacte e abra `MiguelAngelusCast.exe`. Não precisa instalar.
 
 ## Pastas
 
@@ -27,10 +33,9 @@ Funciona junto com o MiguelAngelus ou sozinho.
 ## Compilar
 
 Precisa do .NET 8 SDK e do **FFmpeg LGPL** (build `ffmpeg-master-latest-win64-lgpl-shared` do BtbN, no GitHub): copie `ffmpeg.exe`, as DLLs e o `LICENSE.txt` para `programa/ffmpeg/` (essa pasta não vai para o repositório). Use a versão **LGPL**, nunca a GPL: o Cast é MIT. Para rodar, o computador precisa do **NDI Runtime** (vem no NDI Tools) para as câmeras NDI
-
-**Modelo de reconhecimento (SFace):** o arquivo `face_recognition_sface_2021dec.onnx` (37 MB) passa do limite de envio do GitHub e não está no repositório. Baixe do OpenCV Zoo (https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) e coloque em `programa/modelos/` (e em `kit-rastreio/modelos/`). O detector YuNet já está aqui.
-
 e do **WebView2** (já vem no Windows 10/11).
+
+**Modelo de reconhecimento (SFace):** o arquivo `face_recognition_sface_2021dec.onnx` (37 MB) passa do limite de envio do GitHub e não está no repositório. Baixe do OpenCV Zoo (https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) e coloque em `programa/modelos/` (e em `kit-rastreio/modelos/`). O detector YuNet já está aqui. No zip do Releases ele já vem.
 
 ```
 cd programa
