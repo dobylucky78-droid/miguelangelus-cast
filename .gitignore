@@ -10,3 +10,6 @@ telemetria/
 segredos*
 # FFmpeg (LGPL) é baixado à parte: veja README
 programa/ffmpeg/
+# instalador: o programa publicado e os instaladores gerados não vão para o repositório
+instalador/saida/
+instalador/*.exe
