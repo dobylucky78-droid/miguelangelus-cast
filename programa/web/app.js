@@ -53,6 +53,7 @@ enviar({ tipo: 'miguelPedir' });
 function abrirSobre() { const d = $('#dlgSobre'); if (!d.open) d.showModal(); }
 $('.marca').onclick = abrirSobre;
 $('.marca').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirSobre(); } };
+$$('[data-sec="botoes"] [data-link]').forEach(b => b.onclick = () => enviar({ tipo: 'abrirLink', url: b.dataset.link }));   // (0.1.11)
 $$('#dlgSobre [data-link]').forEach(b => b.onclick = () => enviar({ tipo: 'abrirLink', url: b.dataset.link }));
 $('#dlgSobre').onclick = e => {      // clique fora (no fundo escuro) fecha
   const d = e.currentTarget, r = d.getBoundingClientRect();
@@ -101,6 +102,8 @@ if (NO_APP) {
     else if (m.tipo === 'rtPessoas') { renderPessoas(m); PESSOAS = m.lista || []; if (!document.activeElement?.closest('#roLista')) renderRoLista(); }
     else if (m.tipo === 'sobre') { $('#soVersao').textContent = 'versão ' + m.versao; $('#soDados').textContent = m.dados; }
     else if (m.tipo === 'backupMsg') $('#bkMsg').textContent = m.msg;
+    else if (m.tipo === 'atualizacao') mostrarAtualizacao(m);
+    else if (m.tipo === 'atualizacaoMsg') { $('#atuMsg').textContent = m.msg; $('#atuMsg').style.color = m.erro ? 'var(--erro, #e66)' : ''; if (m.erro) $('#atuInstalar').disabled = false; }
     else if (m.tipo === 'inicioCk') renderInicioCk(m);
     else if (m.tipo === 'capaImg') { if (m.modo === 'mini') $('#inCapa').src = 'data:image/jpeg;base64,' + m.img; else if (m.modo === CP.modo) $('#cpImg').src = 'data:image/jpeg;base64,' + m.img; }
     else if (m.tipo === 'rotVideoEscolhido') videoEscolhido(m);
@@ -1037,6 +1040,25 @@ $('#redeInternet').onclick = () => { $('#redeNet').innerHTML = '<p class="dica">
 $('#bkExportar').onclick = () => enviar({ tipo: 'backupExportar' });
 $('#bkImportar').onclick = () => enviar({ tipo: 'backupImportar' });
 $$('[data-pasta]').forEach(b => b.onclick = () => enviar({ tipo: 'abrirPastaDados', qual: b.dataset.pasta }));
+// ---------- (0.1.11) atualização automática ----------
+let ATU = null;
+function mostrarAtualizacao(m) {
+  ATU = m;
+  const nova = !!m.nova;
+  $('#novaVersao').hidden = !nova;
+  if (nova) $('#novaVersao').textContent = '⬆ Versão ' + m.nova;
+  $('#atuInstalar').hidden = !nova; $('#atuInstalar').disabled = false;
+  $('#atuNotas').hidden = !(nova && m.notas);
+  $('#atuNotas').textContent = nova ? (m.notas || '') : '';
+  $('#atuMsg').style.color = '';
+  $('#atuMsg').textContent = !m.ok ? (m.erro || 'Não consegui ver se há versão nova.')
+    : !m.ligada ? 'Esta cópia do Cast não é a assinada (teste): não procura atualização.'
+    : nova ? `Versão ${m.nova} disponível (você tem a ${m.atual}; ${Math.round((m.tamanho || 0) / 1048576)} MB).`
+    : `Você já tem a versão mais nova (${m.atual}).`;
+}
+$('#atuVerificar').onclick = () => { $('#atuMsg').textContent = 'Procurando…'; enviar({ tipo: 'atualizacaoVerificar' }); };
+$('#atuInstalar').onclick = () => { if (!ATU || !ATU.url) return; $('#atuInstalar').disabled = true; enviar({ tipo: 'atualizacaoInstalar', url: ATU.url }); };
+$('#novaVersao').onclick = () => { document.querySelector('nav [data-tela="ajustes"]').click(); abrirSecao('backup'); };
 // ---------- cadastros de rosto guardados ----------
 function renderPessoas(m) {
   $('#rtPessoasLista').innerHTML = m.lista.length ? m.lista.map(p => `<div class="ck">${esc(p.nome)}${p.funcao ? ` <span class="dica">· ${esc(p.funcao)}</span>` : ''}<span class="r"><span class="dica">autorizou em ${esc(p.desde)}</span>

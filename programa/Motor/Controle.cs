@@ -57,7 +57,9 @@ namespace MiguelAngelusCast.Motor
             c.Porta = Porta;
             try { File.WriteAllText(arquivo, JsonSerializer.Serialize(c)); } catch (Exception e) { Registro.Erro("controle.json", e); }
             Registro.Info("controle por botões em 127.0.0.1:" + Porta);
-            try { AtualizarPlugins(false); } catch (Exception e) { Registro.Erro("plugin do Stream Dock", e); }
+            // (0.1.11) cópia de teste (CAST_DADOS) não mexe no plugin instalado: ele ficaria com a porta e a chave da cópia
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CAST_DADOS")))
+                try { AtualizarPlugins(false); } catch (Exception e) { Registro.Erro("plugin do Stream Dock", e); }
             new Thread(Laco) { IsBackground = true, Name = "controle" }.Start();
         }
 
@@ -259,6 +261,31 @@ namespace MiguelAngelusCast.Motor
                 }
             }
             finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(sh); }
+        }
+
+        // (0.1.11) o Cast mudou de pasta (ex.: do pen drive para a instalação): os atalhos já feitos passam a apontar para este .exe
+        public static int ReapontarAtalhos(string pasta)
+        {
+            if (!Directory.Exists(pasta)) return 0;
+            var exe = Environment.ProcessPath; int n = 0;
+            dynamic sh = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
+            try
+            {
+                foreach (var f in Directory.GetFiles(pasta, "*.lnk", SearchOption.AllDirectories))
+                {
+                    dynamic lnk = sh.CreateShortcut(f);
+                    try
+                    {
+                        string alvo = lnk.TargetPath;
+                        if (string.Equals(Path.GetFileName(alvo), Path.GetFileName(exe), StringComparison.OrdinalIgnoreCase) && !string.Equals(alvo, exe, StringComparison.OrdinalIgnoreCase))
+                        { lnk.TargetPath = exe; lnk.WorkingDirectory = Path.GetDirectoryName(exe); lnk.Save(); n++; }
+                    }
+                    finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(lnk); }
+                }
+            }
+            finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(sh); }
+            if (n > 0) Registro.Info($"{n} atalhos de botões apontados para {exe}");
+            return n;
         }
 
         static void Figura(string rotulo, System.Drawing.Color cor, string arquivo)

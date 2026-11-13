@@ -413,3 +413,6 @@ body.arrastando-cena,body.arrastando-cena *{cursor:grabbing!important}
 .cm-cam-acoes { display: flex; flex-direction: column; gap: 6px; }
 .cm-cam-ok { color: #6fcf8e; }
 .cm-cam-erro { color: #ff8a80; }
+/* (0.1.11) aviso de versão nova no topo */
+#novaVersao{background:var(--dourado,#c9a227);color:#111;border:0;font-weight:700}
+#novaVersao:hover{filter:brightness(1.1)}

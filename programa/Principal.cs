@@ -30,6 +30,7 @@ namespace MiguelAngelusCast
         readonly Timer relogioRastreio = new Timer { Interval = 200 };
         long rtImagemSeq; bool rtVisivel;
         Roteiro roteiro; volatile bool rotPendente;
+        System.Threading.Timer atuRelogio; bool atualizando;
 
         public Principal()
         {
@@ -104,6 +105,11 @@ namespace MiguelAngelusCast
                 Controle.Executar = Botao;
                 Controle.Estado = EstadoBotoes;
                 Controle.Iniciar();
+                // (0.1.11) atalhos dos botões feitos com o Cast em outra pasta (pen drive, zip) passam a abrir este; nunca numa cópia de teste
+                if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CAST_DADOS")))
+                    _ = System.Threading.Tasks.Task.Run(() => { try { Controle.ReapontarAtalhos(PastaBotoes); } catch (Exception ex) { Registro.Erro("atalhos dos botões", ex); } });
+                // (0.1.11) versão nova no GitHub: confere 20 s depois de abrir e a cada 6 horas (só avisa; quem atualiza é o operador)
+                atuRelogio = new System.Threading.Timer(_ => { _ = Atualizacao.Verificar().ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Na(() => Enviar(t.Result)); }); }, null, 20000, 6 * 3600 * 1000);
                 // (0.0.5) agenda do MiguelAngelus: a capa e o Início acompanham as próximas celebrações
                 Miguel.Mudou += () => Na(() => { AplicarAgenda(); EnviarMiguel(); if (!ytOcupado) EnviarYt(); });
                 Miguel.Iniciar();
@@ -728,7 +734,47 @@ namespace MiguelAngelusCast
                         Capa.Trocar(c, true); AplicarAgenda(); EnviarMiguel(); EnviarInicio(); break;
                     }
                 case "sobrePedir":
-                    Enviar(new { tipo = "sobre", versao = Program.Versao, dados = Program.PastaDados, programa = Program.Pasta, runtime = Environment.Version.ToString() }); break;
+                    Enviar(new { tipo = "sobre", versao = Program.Versao, dados = Program.PastaDados, programa = Program.Pasta, runtime = Environment.Version.ToString() });
+                    if (Atualizacao.Ultima != null) Enviar(Atualizacao.Ultima);
+                    break;
+                // ---------- (0.1.11) atualização automática ----------
+                case "atualizacaoVerificar":
+                    _ = Atualizacao.Verificar().ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Na(() => Enviar(t.Result)); });
+                    break;
+                case "atualizacaoInstalar":
+                    {
+                        if (atualizando) break;
+                        if (saida.AoVivo || saida.Gravando) { Enviar(new { tipo = "atualizacaoMsg", msg = "Pare a transmissão e a gravação antes de atualizar.", erro = true }); break; }
+                        var url = Txt("url");
+                        atualizando = true;
+                        Enviar(new { tipo = "atualizacaoMsg", msg = "Baixando a versão nova…" });
+                        long ultimo = 0;
+                        _ = System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var baixado = await Atualizacao.BaixarEConferir(url, (f, t) =>
+                                {
+                                    var agora = Environment.TickCount64; if (agora - ultimo < 300 && f < t) return; ultimo = agora;
+                                    Na(() => Enviar(new { tipo = "atualizacaoMsg", msg = t > 0 ? $"Baixando… {f * 100 / t}% ({f / 1048576} de {t / 1048576} MB)" : $"Baixando… {f / 1048576} MB" }));
+                                });
+                                Registro.Info("atualização baixada e conferida: " + baixado);
+                                Na(() =>
+                                {
+                                    if (Atualizacao.Teste) { atualizando = false; Enviar(new { tipo = "atualizacaoMsg", msg = "Teste: o instalador baixou e a assinatura conferiu (não instalado)." }); return; }
+                                    Enviar(new { tipo = "atualizacaoMsg", msg = "Instalando… o Cast fecha e abre de novo sozinho." });
+                                    Atualizacao.Instalar(baixado);
+                                    var t = new Timer { Interval = 1500 }; t.Tick += (s2, e2) => { t.Stop(); Close(); }; t.Start();
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                Registro.Erro("atualizar", ex);
+                                Na(() => { atualizando = false; Enviar(new { tipo = "atualizacaoMsg", msg = "Não atualizou: " + ex.Message, erro = true }); });
+                            }
+                        });
+                        break;
+                    }
                 case "abrirPastaDados":
                     {
                         var qual = Txt("qual"); var pasta = qual == "registro" ? Path.Combine(Program.PastaDados, "registro") : Program.PastaDados;
@@ -853,7 +899,9 @@ namespace MiguelAngelusCast
                 case "abrirLink":      // (0.1.1) links do Sobre: só os da paróquia e o e-mail de contato
                     {
                         var u = Txt("url") ?? "";
-                        if (u == "https://pascom-sjo.github.io/" || u == "mailto:contato.miguelangelus@gmail.com" || u.StartsWith("https://www.youtube.com/@SaoJos"))
+                        // (0.1.11) e as páginas oficiais para baixar o programa do Stream Dock e do Stream Deck
+                        if (u == "https://pascom-sjo.github.io/" || u == "mailto:contato.miguelangelus@gmail.com" || u.StartsWith("https://www.youtube.com/@SaoJos")
+                            || u == "https://mirabox.net/pages/download" || u == "https://www.elgato.com/s/downloads")
                             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
                         break;
                     }

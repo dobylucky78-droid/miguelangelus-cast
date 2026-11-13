@@ -66,6 +66,7 @@
       <span class="nome"><span class="dourado">Miguel</span>Angelus<span class="cast">Cast</span></span>
       <small id="versao">v0</small>
     </div>
+    <button id="novaVersao" class="peq" hidden title="Há uma versão nova do Cast: ver e atualizar">⬆ Versão nova</button>
     <nav aria-label="Telas">
       <button class="navb" data-tela="inicio">Início</button>
       <button class="navb sel" data-tela="mesa">Ao vivo</button>
@@ -576,6 +577,12 @@
           <p class="dica" style="margin:0 0 8px">Cenas, câmeras e posições, roteiros, capa, som, transmissão e joysticks num arquivo .zip, para guardar ou levar a outro computador. Não vão: as chaves de transmissão, os cadastros de rosto, a ilustração do folheto e os registros.</p>
           <div class="linha"><button class="prim" id="bkExportar">Salvar backup…</button><button id="bkImportar">Restaurar um backup…</button><span class="dica" id="bkMsg"></span></div>
         </div>
+        <div class="pn" style="margin-top:12px" id="atuPainel">
+          <div class="rot"><span>Atualização</span></div>
+          <p class="dica" style="margin:0 0 8px" id="atuTexto">O Cast confere sozinho se há versão nova no GitHub (ao abrir e a cada 6 horas). Só atualiza quando você mandar, e nunca durante a transmissão ou a gravação. Os ajustes, cenas e roteiros ficam.</p>
+          <pre class="dica" id="atuNotas" hidden style="white-space:pre-wrap;max-height:180px;overflow:auto;margin:0 0 8px"></pre>
+          <div class="linha"><button id="atuVerificar">Procurar agora</button><button class="prim" id="atuInstalar" hidden>Atualizar agora</button><span class="dica" id="atuMsg"></span></div>
+        </div>
         <div class="pn" style="margin-top:12px">
           <div class="rot"><span>Sobre</span></div>
           <div class="ck">MiguelAngelus Cast<span class="r" id="soVersao"></span></div>
@@ -592,6 +599,11 @@
         <h2 style="margin:0 0 4px">Stream Deck e botões</h2>
         <p class="dica" style="margin:0 0 12px">Teclas de um Stream Deck (Elgato) ou Stream Dock (Mirabox/Ajazz) mandam comandos para o Cast, mesmo com ele minimizado. Só funciona neste computador: ninguém na rede consegue mandar.</p>
         <div class="pn">
+          <div class="rot"><span>Programa do aparelho</span></div>
+          <p class="dica" style="margin:0 0 8px">O aparelho precisa do programa do fabricante instalado neste computador (é grátis). Instale o do seu aparelho antes do plugin abaixo.</p>
+          <div class="linha"><button data-link="https://mirabox.net/pages/download">⬇ Stream Dock (Mirabox / Ajazz)</button><button data-link="https://www.elgato.com/s/downloads">⬇ Stream Deck (Elgato)</button></div>
+        </div>
+        <div class="pn" style="margin-top:12px">
           <div class="rot"><span>Plugin "MiguelAngelus Cast" (recomendado)</span></div>
           <p class="dica" style="margin:0 0 8px">Instala no programa do aparelho uma categoria <b>MiguelAngelus Cast</b> com as ações prontas: Cena, Transição, Corte, Tela da capa, Momento do roteiro, Mudo, Gravar, Ao vivo, PARAR câmera, Posição da câmera e Painel. É só arrastar para a tecla e escolher a cena. As teclas <b>acendem</b>: a cena no ar fica vermelha, a do Preview verde, Gravar e Ao vivo mostram o tempo. O programa do aparelho é fechado e aberto de novo para carregar o plugin.</p>
           <div class="linha"><button class="prim" id="btPlugin">Instalar o plugin</button><span class="dica" id="btPluginSit"></span></div>
@@ -601,7 +613,7 @@
           <p class="dica" style="margin:0 0 8px">Cria uma pasta em Documentos com 15 atalhos numerados (01 a 15, na ordem das teclas) e a figura de cada tecla (.png). No programa do aparelho, use a ação <b>Abrir</b> (Open / Abrir arquivo) e escolha o atalho; em "ícone", escolha a figura de mesmo nome. Em <b>Mais</b> ficam todas as cenas, direto no ar e as posições das câmeras.</p>
           <div class="linha"><button class="prim" id="btCriar">Criar os atalhos e as figuras</button><button id="btPasta">Abrir a pasta</button><button id="btTestar">Testar (aparece um aviso aqui)</button></div>
           <p class="dica" id="btMsg" style="margin:8px 0 0"></p>
-          <p class="dica" style="margin:6px 0 0">Mudou o nome ou a ordem das cenas, ou mudou o Cast de pasta? Crie os atalhos de novo.</p>
+          <p class="dica" style="margin:6px 0 0">Mudou o nome ou a ordem das cenas? Crie os atalhos de novo. (Se o Cast mudar de pasta, os atalhos se acertam sozinhos ao abrir.)</p>
         </div>
         <div class="pn" style="margin-top:12px">
           <div class="rot"><span>Para quem usa plugin de "pedido web" (Web Requests, API Ninja…)</span></div>

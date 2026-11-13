@@ -17,10 +17,11 @@ Funciona junto com o MiguelAngelus ou sozinho.
 | 0.1 | câmera PTZ **seguindo o celebrante** (rosto cadastrado com autorização) — testes em `kit-rastreio/` |
 | **0.1.9** | cenas com camadas, som por cena, tela/janela e página da internet · **telão inteiro do MiguelAngelus** por NDI · roteiro que **segue o MiguelAngelus** (prepara a próxima cena faltando N slides, câmera livre prepara) · seguir/achar uma **pessoa cadastrada** por momento · fundos temáticos · miniaturas ao vivo · Stream Dock com retorno nas teclas |
 | **0.1.10** | **posição da câmera PTZ salva na cena** (o Cast lê as coordenadas da câmera e guarda na cena, nada é gravado na câmera) · cena no Preview já leva a câmera livre para a posição · chamar a posição pelo Stream Deck · achar/seguir uma pessoa a partir da posição da cena · o momento do roteiro vale mais que a cena |
+| **0.1.11** | **instalador** (como o do MiguelAngelus) e **atualização automática** pelo GitHub, só com instalador assinado |
 
 ## Baixar
 
-O programa pronto (assinado) fica em **Releases**: baixe o `.zip`, descompacte e abra `MiguelAngelusCast.exe`. Não precisa instalar.
+O programa pronto (assinado) fica em **Releases**: baixe o **`Instalar-MiguelAngelus-Cast.exe`** e instale (não pede administrador). A partir da 0.1.11 o Cast avisa quando sai versão nova e se atualiza sozinho, quando você mandar. Até a 0.1.10 ele vinha em `.zip`.
 
 ## Pastas
 
@@ -29,6 +30,7 @@ O programa pronto (assinado) fica em **Releases**: baixe o `.zip`, descompacte e
   - `web/` — a tela
 - `kit-rastreio/` — kit de testes do rastreio da PTZ (gera telemetria para ajustar a 0.1)
 - `marca/` — ícone
+- `instalador/` — instalador (Inno Setup 6) e `gerar_versao_cast.ps1`, que publica, assina e monta a versão
 
 ## Compilar
 
