@@ -45,6 +45,9 @@ namespace MiguelAngelusCast.Motor
         public bool MiguelSoMissas { get; set; } = true;       // Terço, Adoração… não viram "próxima transmissão"
         public bool MiguelFolheto { get; set; } = true;        // (0.0.6) ilustração do folheto vem do roteiro do MiguelAngelus
         public bool MiguelMarcas { get; set; } = true;         // (0.0.7) brasão e logo vêm dos cantos do telão do MiguelAngelus
+        // (0.1.12) celebrações marcadas para transmitir ("2026-11-15T07:00|SJO"; nenhuma = todas) e a escolhida no Início ("" = a primeira)
+        public List<string> MiguelPreparadas { get; set; } = new();
+        public string MiguelEscolhida { get; set; } = "";
         public string YtPrivacidade { get; set; } = "public";   // (0.0.8) live criada pelo Cast: public | unlisted | private
         public string YtDescricao { get; set; } = "";
 

@@ -233,6 +233,20 @@ namespace MiguelAngelusCast.Motor
                      || string.Equals(x.LocalNome, c.MiguelLocal, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+        // (0.1.12) identifica a celebração entre leituras da agenda: data/hora + capela
+        public static string Chave(Celebracao x) => x.Quando.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture) + "|" + (x.LocalSigla ?? "");
+        // As marcadas para transmitir (Ajustes › MiguelAngelus ou Início); nenhuma marcada = todas, como antes
+        public static List<Celebracao> Preparadas(CapaCfg c, DateTime agora)
+        {
+            var t = Transmitidas(c, agora);
+            var p = c.MiguelPreparadas ?? new List<string>();
+            var m = t.Where(x => p.Contains(Chave(x))).ToList();
+            return m.Count > 0 ? m : t;
+        }
+        // A que vai ao ar: a escolhida no Início, se ainda está na lista; senão a primeira
+        public static Celebracao Escolhida(CapaCfg c, List<Celebracao> prep) =>
+            prep.FirstOrDefault(x => Chave(x) == c.MiguelEscolhida) ?? prep.FirstOrDefault();
+
         static readonly CultureInfo pt = new CultureInfo("pt-BR");
         // "Domingo, 07h00" (+ capela, se o Cast transmite de várias)
         public static string TextoProxima(Celebracao x, bool comLocal)
@@ -253,15 +267,17 @@ namespace MiguelAngelusCast.Motor
         public static CapaCfg Aplicar(CapaCfg c)
         {
             if (!c.SeguirMiguel || Lista.Count == 0) return null;
-            var t = Transmitidas(c, DateTime.Now);
+            var t = Preparadas(c, DateTime.Now);
             if (t.Count == 0) return null;
             var comLocal = string.IsNullOrEmpty(c.MiguelLocal) && t.Select(x => x.LocalSigla).Distinct().Count() > 1;
-            var quando = t[0].Quando;
-            var proxima = t.Count > 1 ? TextoProxima(t[1], comLocal) : "";
+            var e = Escolhida(c, t); var i = t.IndexOf(e);
+            var quando = e.Quando;
+            // "Próxima Missa" do encerramento: a próxima marcada depois da escolhida
+            var proxima = i + 1 < t.Count ? TextoProxima(t[i + 1], comLocal) : "";
             // ilustração do folheto da celebração (se o roteiro dela tem e já chegou); sem ela, fica a que estava
             var folheto = c.Folheto;
             var imagem = c.Imagem;
-            if (c.MiguelFolheto && t[0].Capa != "" && System.IO.File.Exists(ArquivoCapa(t[0].Capa))) { folheto = ArquivoCapa(t[0].Capa); imagem = "folheto"; }
+            if (c.MiguelFolheto && e.Capa != "" && System.IO.File.Exists(ArquivoCapa(e.Capa))) { folheto = ArquivoCapa(e.Capa); imagem = "folheto"; }
             // brasão e logo da paróquia (cantos de cima do telão do MiguelAngelus)
             string m1 = c.Marca1, m2 = c.Marca2;
             if (c.MiguelMarcas)

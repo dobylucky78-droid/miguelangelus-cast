@@ -30,7 +30,7 @@ namespace MiguelAngelusCast
         readonly Timer relogioRastreio = new Timer { Interval = 200 };
         long rtImagemSeq; bool rtVisivel;
         Roteiro roteiro; volatile bool rotPendente;
-        System.Threading.Timer atuRelogio; bool atualizando;
+        System.Threading.Timer atuRelogio, nuvemRelogio; bool atualizando;
 
         public Principal()
         {
@@ -46,7 +46,10 @@ namespace MiguelAngelusCast
             {
                 if ((saida.AoVivo || saida.Gravando) && MessageBox.Show(this, (saida.AoVivo ? "A transmissão está no ar" : "A gravação está ligada") + ".\n\nEncerrar e fechar o Cast?", "MiguelAngelus Cast", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 { e.Cancel = true; return; }
-                Controle.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose(); Registro.Info("fechou");
+                Controle.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose();
+                // (0.1.12) leva para a nuvem o que mudou nesta sessão (até 8 s; sem internet, vai na próxima vez)
+                if (Nuvem.Ligada) try { System.Threading.Tasks.Task.Run(() => Nuvem.Sincronizar(false)).Wait(8000); } catch { }
+                Registro.Info("fechou");
             };
         }
 
@@ -110,6 +113,8 @@ namespace MiguelAngelusCast
                     _ = System.Threading.Tasks.Task.Run(() => { try { Controle.ReapontarAtalhos(PastaBotoes); } catch (Exception ex) { Registro.Erro("atalhos dos botões", ex); } });
                 // (0.1.11) versão nova no GitHub: confere 20 s depois de abrir e a cada 6 horas (só avisa; quem atualiza é o operador)
                 atuRelogio = new System.Threading.Timer(_ => { _ = Atualizacao.Verificar().ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Na(() => Enviar(t.Result)); }); }, null, 20000, 6 * 3600 * 1000);
+                // (0.1.12) nuvem: o que mudou aqui vai para a nuvem a cada 3 minutos (o que chega de lá, ao abrir ou no ☁ Atualizar)
+                nuvemRelogio = new System.Threading.Timer(_ => { if (Nuvem.Ligada && !Nuvem.Ocupada) _ = Nuvem.Sincronizar(false); }, null, 60000, 180000);
                 // (0.0.5) agenda do MiguelAngelus: a capa e o Início acompanham as próximas celebrações
                 Miguel.Mudou += () => Na(() => { AplicarAgenda(); EnviarMiguel(); if (!ytOcupado) EnviarYt(); });
                 Miguel.Iniciar();
@@ -199,6 +204,31 @@ namespace MiguelAngelusCast
             });
         }
 
+        // (0.1.12) nuvem
+        void NuvemConectar(Func<System.Threading.Tasks.Task<string>> como)
+        {
+            Enviar(new { tipo = "nuvemMsg", msg = "Conectando…" });
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try { var email = await como(); Na(() => { Enviar(new { tipo = "nuvemMsg", msg = "Conectado: " + email + ". Sincronizando…" }); Enviar(Nuvem.Info()); NuvemAgora(true); }); }
+                catch (Exception e) { Registro.Erro("nuvem: conectar", e); Na(() => { Enviar(new { tipo = "nuvemMsg", msg = "Não conectou: " + e.Message, erro = true }); Enviar(Nuvem.Info()); }); }
+            });
+        }
+        void NuvemAgora(bool baixar)
+        {
+            if (!Nuvem.Ligada) { Enviar(Nuvem.Info()); return; }
+            Enviar(new { tipo = "nuvemMsg", msg = baixar ? "Conferindo a nuvem…" : "Enviando…" });
+            _ = Nuvem.Sincronizar(baixar).ContinueWith(t => Na(() =>
+            {
+                var r = t.Result;
+                var msg = r.Erro != null ? "Não sincronizou: " + r.Erro
+                    : r.Recebidos > 0 ? $"☁ {r.Recebidos} arquivo(s) vieram da nuvem" + (r.Enviados > 0 ? $" · {r.Enviados} enviado(s) daqui" : "") + ". Reinicie o Cast para usar."
+                    : r.Enviados > 0 ? $"☁ {r.Enviados} arquivo(s) enviado(s) para a nuvem." : "☁ Já estava tudo em dia.";
+                Enviar(new { tipo = "nuvemMsg", msg, erro = r.Erro != null, reiniciar = Nuvem.AguardandoReinicio });
+                Enviar(Nuvem.Info());
+            }));
+        }
+
         // (0.0.5) agenda do MiguelAngelus → capa (data, hora, "Próxima Missa"); ao mudar, o Início e a capa se refazem
         void AplicarAgenda()
         {
@@ -210,10 +240,14 @@ namespace MiguelAngelusCast
         }
         void EnviarMiguel()
         {
-            var c = Capa.Cfg;
-            var t = Miguel.Transmitidas(c, DateTime.Now).Take(8).Select(x => new
+            var c = Capa.Cfg; var agora = DateTime.Now;
+            // (0.1.12) cada uma diz se está marcada para transmitir e se é a escolhida (a da capa)
+            var prep = Miguel.Preparadas(c, agora); var esc = c.SeguirMiguel ? Miguel.Escolhida(c, prep) : null;
+            var marcadas = c.MiguelPreparadas ?? new System.Collections.Generic.List<string>();
+            var t = Miguel.Transmitidas(c, agora).Take(12).Select(x => new
             {
-                quando = x.Quando.ToString("yyyy-MM-ddTHH:mm"), quandoTxt = Miguel.TextoProxima(x, true), nome = x.Texto, roteiro = x.TemRoteiro
+                quando = x.Quando.ToString("yyyy-MM-ddTHH:mm"), quandoTxt = Miguel.TextoProxima(x, true), nome = x.Texto, roteiro = x.TemRoteiro,
+                chave = Miguel.Chave(x), preparada = marcadas.Contains(Miguel.Chave(x)), escolhida = x == esc
             }).ToList();
             Enviar(new
             {
@@ -613,6 +647,7 @@ namespace MiguelAngelusCast
                         }
                         else partes.Add("controle por UDP (" + ip + ")");
                     }
+                    else if (!string.IsNullOrEmpty(fonte)) { partes.Add("falta o IP em Ajustes › Câmeras (não se move)"); if (est == "ok") est = "aviso"; }
                     if (partes.Count == 0) { partes.Add("sem imagem nem controle configurados"); est = "aviso"; }
                     Item(nome, est, string.Join(" · ", partes));
                 }
@@ -733,6 +768,32 @@ namespace MiguelAngelusCast
                         if (m.TryGetProperty("marcas", out _)) c.MiguelMarcas = Sim("marcas");
                         Capa.Trocar(c, true); AplicarAgenda(); EnviarMiguel(); EnviarInicio(); break;
                     }
+                // (0.1.12) marcar quais celebrações este Cast vai transmitir e escolher, no Início, a que vai ao ar
+                case "miguelPreparar":
+                case "miguelEscolher":
+                    {
+                        var chave = Txt("chave") ?? "";
+                        var c = JsonSerializer.Deserialize<CapaCfg>(JsonSerializer.Serialize(Capa.Cfg));
+                        bool escolher = m.GetProperty("tipo").GetString() == "miguelEscolher", ocupado = saida.AoVivo || roteiro.Agora >= 0;
+                        var antes = Miguel.Escolhida(c, Miguel.Preparadas(c, DateTime.Now));
+                        var chaveAntes = antes == null ? "" : Miguel.Chave(antes);
+                        if (ocupado && chaveAntes != "" && (escolher ? chave != chaveAntes : chave == chaveAntes && !Sim("sim")))
+                        { Aviso("Há uma celebração em andamento: troque a que vai ao ar depois de encerrar."); EnviarMiguel(); break; }
+                        // limpa as que já passaram
+                        var limite = DateTime.Now.AddDays(-1).ToString("yyyy-MM-ddTHH:mm", System.Globalization.CultureInfo.InvariantCulture);
+                        c.MiguelPreparadas = (c.MiguelPreparadas ?? new()).Where(k => string.CompareOrdinal(k, limite) > 0).Distinct().ToList();
+                        if (escolher)
+                        {
+                            c.MiguelEscolhida = chave;
+                            if (chave != "" && !c.MiguelPreparadas.Contains(chave) && c.MiguelPreparadas.Count > 0) c.MiguelPreparadas.Add(chave);
+                        }
+                        else if (Sim("sim")) { if (!c.MiguelPreparadas.Contains(chave)) c.MiguelPreparadas.Add(chave); }
+                        else { c.MiguelPreparadas.Remove(chave); if (c.MiguelEscolhida == chave) c.MiguelEscolhida = ""; }
+                        // no ar ou com o roteiro aberto: marcar outras não tira a atual do ar
+                        if (ocupado && chaveAntes != "") { c.MiguelEscolhida = chaveAntes; if (c.MiguelPreparadas.Count > 0 && !c.MiguelPreparadas.Contains(chaveAntes)) c.MiguelPreparadas.Add(chaveAntes); }
+                        c.MiguelPreparadas.Sort(StringComparer.Ordinal);
+                        Capa.Trocar(c, true); AplicarAgenda(); EnviarMiguel(); EnviarInicio(); if (!ytOcupado) EnviarYt(); break;
+                    }
                 case "sobrePedir":
                     Enviar(new { tipo = "sobre", versao = Program.Versao, dados = Program.PastaDados, programa = Program.Pasta, runtime = Environment.Version.ToString() });
                     if (Atualizacao.Ultima != null) Enviar(Atualizacao.Ultima);
@@ -803,7 +864,26 @@ namespace MiguelAngelusCast
                         }
                         catch (Exception e) { Registro.Erro("restaurar backup", e); Enviar(new { tipo = "backupMsg", msg = "Não consegui restaurar: " + e.Message }); }
                         break;
-                    }                // ---------- joysticks ----------
+                    }
+                // ---------- (0.1.12) nuvem: a mesma conta Google e a mesma pasta do MiguelAngelus ----------
+                case "nuvemPedir": Enviar(Nuvem.Info()); break;
+                case "nuvemLigar": Nuvem.Ligar(Sim("sim")); Enviar(Nuvem.Info()); if (Sim("sim")) NuvemAgora(true); break;
+                case "nuvemUsarMiguel": NuvemConectar(Nuvem.UsarContaDoMiguel); break;
+                case "nuvemConectar": NuvemConectar(Nuvem.Conectar); break;
+                case "nuvemCliente":
+                    {
+                        using var dlg = new OpenFileDialog { Title = "ID do cliente OAuth do Google (o mesmo JSON do MiguelAngelus)", Filter = "JSON do Google|*.json" };
+                        if (dlg.ShowDialog(this) != DialogResult.OK) break;
+                        try { Nuvem.DefinirCliente(File.ReadAllText(dlg.FileName)); Enviar(new { tipo = "nuvemMsg", msg = "Arquivo do cliente carregado. Agora clique em Conectar." }); }
+                        catch (Exception e) { Enviar(new { tipo = "nuvemMsg", msg = "Não deu: " + e.Message, erro = true }); }
+                        Enviar(Nuvem.Info()); break;
+                    }
+                case "nuvemDesconectar": Nuvem.Desconectar(); Enviar(Nuvem.Info()); Enviar(new { tipo = "nuvemMsg", msg = "Desconectado. Os ajustes deste computador continuam aqui; os da nuvem também." }); break;
+                case "nuvemAgora": NuvemAgora(true); break;
+                case "nuvemReiniciar":
+                    if (saida.AoVivo || saida.Gravando) { Enviar(new { tipo = "nuvemMsg", msg = "Pare a transmissão e a gravação antes de reiniciar.", erro = true }); break; }
+                    Registro.Info("nuvem: reiniciando para usar o que veio da nuvem");
+                    Application.Restart(); Environment.Exit(0); break;                // ---------- joysticks ----------
                 case "joyLigar":
                     joystick ??= new LeitorJoystick(Enviar);
                     Enviar(new { tipo = "joyCfg", dados = LeitorJoystick.Carregar() }); break;

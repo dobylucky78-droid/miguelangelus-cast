@@ -21,6 +21,8 @@ namespace MiguelAngelusCast
             Registro.Iniciar();
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Registro.Erro("não tratado", e.ExceptionObject as Exception);
             Application.ThreadException += (s, e) => Registro.Erro("tela", e.Exception);
+            // (0.1.12) ajustes mudados em outro computador chegam antes de carregar cenas e câmeras
+            Nuvem.AoAbrir(); Nuvem.Aberto = true;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Principal());

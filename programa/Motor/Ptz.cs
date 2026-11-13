@@ -51,12 +51,28 @@ namespace MiguelAngelusCast.Motor
 
         static List<CameraCfg> Carregar()
         {
-            try { if (File.Exists(arquivo)) return JsonSerializer.Deserialize<List<CameraCfg>>(File.ReadAllText(arquivo)) ?? new List<CameraCfg>(); }
+            try
+            {
+                if (File.Exists(arquivo))
+                {
+                    var l = JsonSerializer.Deserialize<List<CameraCfg>>(File.ReadAllText(arquivo)) ?? new List<CameraCfg>();
+                    foreach (var c in l) if (string.IsNullOrWhiteSpace(c.Ip)) c.Ip = IpDoNdi(c.Fonte);   // (0.1.12)
+                    return l;
+                }
+            }
             catch (Exception e) { Registro.Erro("ler cameras.json", e); }
             return new List<CameraCfg>();
         }
+        // (0.1.12) "F2.DP (NDI HX2, 192.168.100.190)" → "192.168.100.190": a imagem NDI já diz onde a câmera está
+        public static string IpDoNdi(string fonte)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(fonte ?? "", @"\((?:[^()]*?[,\s])?(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?\)\s*$");
+            return m.Success ? m.Groups[1].Value : "";
+        }
         public static void Salvar()
         {
+            foreach (var c in Lista)
+                if (string.IsNullOrWhiteSpace(c.Ip) && IpDoNdi(c.Fonte) is { Length: > 0 } ip) { c.Ip = ip; Registro.Info("câmera " + c.Nome + ": IP " + ip + " tirado do nome da imagem NDI"); }
             try { File.WriteAllText(arquivo, JsonSerializer.Serialize(Lista, new JsonSerializerOptions { WriteIndented = true })); }
             catch (Exception e) { Registro.Erro("gravar cameras.json", e); }
             Mudou?.Invoke();

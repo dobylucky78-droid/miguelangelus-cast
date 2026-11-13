@@ -18,6 +18,7 @@ Funciona junto com o MiguelAngelus ou sozinho.
 | **0.1.9** | cenas com camadas, som por cena, tela/janela e página da internet · **telão inteiro do MiguelAngelus** por NDI · roteiro que **segue o MiguelAngelus** (prepara a próxima cena faltando N slides, câmera livre prepara) · seguir/achar uma **pessoa cadastrada** por momento · fundos temáticos · miniaturas ao vivo · Stream Dock com retorno nas teclas |
 | **0.1.10** | **posição da câmera PTZ salva na cena** (o Cast lê as coordenadas da câmera e guarda na cena, nada é gravado na câmera) · cena no Preview já leva a câmera livre para a posição · chamar a posição pelo Stream Deck · achar/seguir uma pessoa a partir da posição da cena · o momento do roteiro vale mais que a cena |
 | **0.1.11** | **instalador** (como o do MiguelAngelus) e **atualização automática** pelo GitHub, só com instalador assinado |
+| **0.1.12** | **escolher quais celebrações da agenda transmitir** e, no Início, qual vai ao ar · **sincronização pelo Google Drive** (mesma conta e pasta do MiguelAngelus, subpasta Cast; chaves e rostos nunca vão) · aviso de **câmera sem IP**, com o IP tirado do nome NDI |
 
 ## Baixar
 
@@ -48,9 +49,9 @@ O programa sai "self-contained": não precisa instalar o .NET no computador da i
 
 ## Dados e privacidade
 
-- Ajustes e cenas ficam em `%LOCALAPPDATA%\MiguelAngelusCast`, só naquele computador.
-- Chaves e autorizações das plataformas ficam criptografadas no computador e **nunca** vão para o repositório nem para o backup.
-- O rosto cadastrado para o rastreio (0.1) é dado sensível (LGPD): só com autorização por escrito, fica só no computador e pode ser apagado.
+- Ajustes e cenas ficam em `%LOCALAPPDATA%\MiguelAngelusCast`, só naquele computador — a não ser que você ligue a **sincronização pela nuvem** (0.1.12): aí cenas, câmeras, roteiros, capa, rastreio e joysticks vão para o **Google Drive da própria paróquia** (pasta `MiguelAngelus/Cast`, a mesma conta do MiguelAngelus, escopo que só enxerga o que os dois programas criaram). Nada passa por servidor nosso.
+- Chaves e autorizações das plataformas ficam criptografadas no computador e **nunca** vão para o repositório, o backup ou a nuvem.
+- O rosto cadastrado para o rastreio (0.1) é dado sensível (LGPD): só com autorização por escrito, fica só no computador (nem a nuvem leva) e pode ser apagado.
 
 ## Licença
 

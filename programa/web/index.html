@@ -67,6 +67,7 @@
       <small id="versao">v0</small>
     </div>
     <button id="novaVersao" class="peq" hidden title="Há uma versão nova do Cast: ver e atualizar">⬆ Versão nova</button>
+    <button id="nuvTopo" class="peq" hidden title="Buscar na nuvem o que outro computador mudou (cenas, câmeras, roteiros, capa) e mandar o que mudou aqui">☁ Atualizar</button>
     <nav aria-label="Telas">
       <button class="navb" data-tela="inicio">Início</button>
       <button class="navb sel" data-tela="mesa">Ao vivo</button>
@@ -280,7 +281,8 @@
       <div class="ingrade">
         <div class="pn inprox">
           <div style="flex:999 1 420px;min-width:0">
-            <div class="rot" style="color:var(--ac)"><span>Próxima celebração</span></div>
+            <div class="rot" style="color:var(--ac)"><span>Próxima celebração</span>
+              <label id="inEscolhaLinha" hidden style="margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0">Transmitir <select id="inEscolha" title="Qual das celebrações marcadas vai ao ar: a capa, a contagem e a live do YouTube passam a ser dela"></select></label></div>
             <div class="intit" id="inTitulo"></div>
             <div style="margin-top:4px"><span class="dot" id="inCorDot" style="border-radius:3px"></span> <span id="inCelebracao"></span> <span class="dica" id="inQuando"></span></div>
             <div class="dica" style="margin-top:8px"><span id="inCelebrante"></span> · data, hora e celebrante em <button class="lnk" id="inIrCapa">Ajustes › Capa da live</button></div>
@@ -319,9 +321,10 @@
         </div>
         <div class="pn inprep">
           <div style="flex:999 1 420px;min-width:0">
-            <div class="rot"><span>Depois</span></div>
+            <div class="rot"><span>Agenda do MiguelAngelus</span></div>
+            <p class="dica" style="margin:0 0 6px" id="inProximasDica" hidden>Marque as que este Cast vai transmitir; sem nenhuma marcada, vale a próxima da agenda. A que vai ao ar você escolhe em "Transmitir", lá em cima.</p>
             <div id="inProximas"></div>
-            <p class="dica" style="margin:0" id="inProximasSem">As próximas celebrações aparecem aqui quando a Agenda do MiguelAngelus estiver ligada ao Cast (etapa da integração). Por enquanto, a próxima celebração é a da Capa da live.</p>
+            <p class="dica" style="margin:0" id="inProximasSem">As próximas celebrações aparecem aqui (para marcar as que vão ser transmitidas) quando a Agenda do MiguelAngelus estiver ligada em Ajustes › MiguelAngelus. Sem ela, a celebração é a da Capa da live.</p>
           </div>
           <div style="flex:1 1 260px;display:flex;flex-direction:column;gap:8px">
             <button class="prim" id="inPreparar" style="padding:16px;font-size:16px">Preparar a celebração</button>
@@ -465,6 +468,7 @@
                 <button id="btnCamSalvar" class="prim">Salvar</button>
                 <button id="btnCamApagar" class="peq">Apagar câmera</button>
               </div>
+              <p class="dica" id="camSemIp" hidden style="color:var(--av)">⚠ Falta o IP: sem ele a câmera não se move (posições, roteiro e rastreio). Escolha a imagem NDI e o Cast preenche sozinho, ou digite o IP e salve.</p>
               <div id="camPtz" class="ptz-corpo">
                 <div class="ptz-pad" title="Segure para mover; solte para parar">
                   <span></span><button data-ptzmov="0,-1" aria-label="Para cima">▲</button><span></span>
@@ -557,7 +561,8 @@
           <div class="ck">Ilustração do folheto na capa<span class="r"><button class="peq" id="miFolheto">Ligado</button> <span class="dica">a do roteiro importado no MiguelAngelus</span></span></div>
           <div class="ck">Brasão e logo da paróquia na capa<span class="r"><button class="peq" id="miMarcas">Ligado</button> <span class="dica">os cantos de cima do telão do MiguelAngelus</span></span></div>
           <div class="ck">Só Missas<span class="r"><button class="peq" id="miSoMissas">Ligado</button> <span class="dica">Terço, Adoração… não contam</span></span></div>
-          <div id="miProximas" style="margin-top:8px"></div>
+          <p class="dica" style="margin:8px 0 0">Marque as celebrações que este Cast vai transmitir (sem nenhuma marcada, vale sempre a próxima). No Início você escolhe qual delas vai ao ar.</p>
+          <div id="miProximas" style="margin-top:4px"></div>
           <p class="dica" style="margin:8px 0 0">Ligado, a data e a hora da capa e o "Próxima Missa" do encerramento vêm daqui (o resto da capa continua seu). O MiguelAngelus precisa estar aberto com o <b>Controle pelo celular</b> ligado.</p>
         </div>
         <div class="pn" style="margin-top:12px">
@@ -576,6 +581,21 @@
           <div class="rot"><span>Backup dos ajustes</span></div>
           <p class="dica" style="margin:0 0 8px">Cenas, câmeras e posições, roteiros, capa, som, transmissão e joysticks num arquivo .zip, para guardar ou levar a outro computador. Não vão: as chaves de transmissão, os cadastros de rosto, a ilustração do folheto e os registros.</p>
           <div class="linha"><button class="prim" id="bkExportar">Salvar backup…</button><button id="bkImportar">Restaurar um backup…</button><span class="dica" id="bkMsg"></span></div>
+        </div>
+        <div class="pn" style="margin-top:12px" id="nuvPainel">
+          <div class="rot"><span>Sincronizar pela nuvem (Google Drive)</span><button class="peq" id="nuvLigar">Desligado</button></div>
+          <p class="dica" style="margin:0 0 8px">A mesma conta Google e a mesma pasta <b>MiguelAngelus</b> do MiguelAngelus (subpasta <b>Cast</b>). Vão: cenas, câmeras e posições, roteiros, capa (com as imagens que você escolheu), rastreio e joysticks. Ficam só aqui: chaves de transmissão e do YouTube, rostos cadastrados, a ilustração do folheto, som e saída (placa de som, pasta de gravação) e os registros. O mais novo vence; a versão trocada fica guardada em "nuvem-anteriores" na pasta de dados.</p>
+          <div class="ck">Conta<span class="r" id="nuvConta">—</span></div>
+          <div class="ck">Última sincronização<span class="r" id="nuvUltima">—</span></div>
+          <div class="linha" style="margin-top:8px">
+            <button class="prim" id="nuvMiguel" hidden>Usar a conta do MiguelAngelus deste computador</button>
+            <button id="nuvCliente" hidden>Carregar o JSON do cliente…</button>
+            <button id="nuvConectar" hidden>Conectar…</button>
+            <button id="nuvAgora" hidden>☁ Atualizar agora</button>
+            <button class="prim" id="nuvReiniciar" hidden>Reiniciar o Cast para usar</button>
+            <button class="peq" id="nuvDesconectar" hidden>Desconectar</button>
+          </div>
+          <p class="dica" style="margin:8px 0 0" id="nuvMsg"></p>
         </div>
         <div class="pn" style="margin-top:12px" id="atuPainel">
           <div class="rot"><span>Atualização</span></div>

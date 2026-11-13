@@ -103,6 +103,11 @@ if (NO_APP) {
     else if (m.tipo === 'sobre') { $('#soVersao').textContent = 'versão ' + m.versao; $('#soDados').textContent = m.dados; }
     else if (m.tipo === 'backupMsg') $('#bkMsg').textContent = m.msg;
     else if (m.tipo === 'atualizacao') mostrarAtualizacao(m);
+    else if (m.tipo === 'nuvem') mostrarNuvem(m);
+    else if (m.tipo === 'nuvemMsg') {
+      $('#nuvMsg').textContent = m.msg; $('#nuvMsg').style.color = m.erro ? 'var(--erro, #e66)' : '';
+      if (m.reiniciar) { $('#nuvReiniciar').hidden = false; if (confirm(m.msg + '\n\nReiniciar o Cast agora?')) enviar({ tipo: 'nuvemReiniciar' }); }
+    }
     else if (m.tipo === 'atualizacaoMsg') { $('#atuMsg').textContent = m.msg; $('#atuMsg').style.color = m.erro ? 'var(--erro, #e66)' : ''; if (m.erro) $('#atuInstalar').disabled = false; }
     else if (m.tipo === 'inicioCk') renderInicioCk(m);
     else if (m.tipo === 'capaImg') { if (m.modo === 'mini') $('#inCapa').src = 'data:image/jpeg;base64,' + m.img; else if (m.modo === CP.modo) $('#cpImg').src = 'data:image/jpeg;base64,' + m.img; }
@@ -537,7 +542,7 @@ function abrirSecao(sec) {
   if (sec === 'capa') enviar({ tipo: 'capaPedir', modo: CP.modo });
   if (sec === 'rede' || sec === 'miguel') enviar({ tipo: 'redePedir' });
   if (sec === 'transmissao') enviar({ tipo: 'ytPedir' });
-  if (sec === 'backup') enviar({ tipo: 'sobrePedir' });
+  if (sec === 'backup') { enviar({ tipo: 'sobrePedir' }); enviar({ tipo: 'nuvemPedir' }); }
   if (sec === 'aparencia') renderAparencia();
   try { localStorage.setItem('cast.secAj', sec); } catch {}
 }
@@ -563,7 +568,7 @@ function renderCameras(m) {
   if (m.lista) CAM.lista = m.lista;
   if (m.fontes) CAM.fontes = m.fontes;
   if (!CAM.sel || !camAtual()) CAM.sel = CAM.lista[0]?.Id || null;
-  $('#camLista').innerHTML = CAM.lista.map(c => `<button class="mo ${c.Id === CAM.sel ? 'sel' : ''}" data-cam="${esc(c.Id)}"><span>📷 ${esc(c.Nome)}<small>${esc(c.Ip || 'sem PTZ')} · ${c.Posicoes.length} posições</small></span></button>`).join('')
+  $('#camLista').innerHTML = CAM.lista.map(c => `<button class="mo ${c.Id === CAM.sel ? 'sel' : ''}" data-cam="${esc(c.Id)}"><span>📷 ${esc(c.Nome)}<small>${c.Ip ? esc(c.Ip) : '⚠ falta o IP'} ·${c.Posicoes.length} posições</small></span></button>`).join('')
     || '<p class="dica">Nenhuma câmera ainda.</p>';
   const c = camAtual(); $('#camEdit').hidden = !c;
   if (!c) return;
@@ -573,7 +578,7 @@ function renderCameras(m) {
     $('#camFonte').innerHTML = '<option value="">— sem imagem —</option>' + fontes.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
     $('#camFonte').value = c.Fonte || '';
   }
-  $('#camPtz').hidden = !c.Ip;
+  $('#camPtz').hidden = !c.Ip; $('#camSemIp').hidden = !!c.Ip;
   const pos = c.Posicoes.slice().sort((a, b) => a.N - b.N);
   $('#camNPos').textContent = `(${pos.length})`;
   $('#camPos').innerHTML = pos.map(p => `<span class="ptz-p"><button data-ptzir="${p.N}" title="Posição nº ${p.N} da câmera">📍 ${esc(p.Nome)}</button><button class="ptz-x ptz-ren" data-ptzren="${p.N}" title="Trocar o nome">✎</button><button class="ptz-x ptz-del" data-ptzdel="${p.N}" title="Tirar da lista (a câmera continua com ela)">✕</button></span>`).join('') || '<span class="dica">Nenhuma posição na lista.</span>';
@@ -582,6 +587,9 @@ const camMsg = t => { $('#camMsg').textContent = t; clearTimeout(CAM.tMsg); CAM.
 $('#camLista').addEventListener('click', e => { const b = e.target.closest('[data-cam]'); if (b) { CAM.sel = b.dataset.cam; renderCameras({}); } });
 $('#btnNovaCam').onclick = () => enviar({ tipo: 'camNova' });
 $('#btnCamNdi').onclick = () => enviar({ tipo: 'camPedir', ndi: true });
+// (0.1.12) "F2.DP (NDI HX2, 192.168.100.190)": o IP vem do nome da imagem NDI, se o campo está vazio
+const ipDoNdi = f => (/\((?:[^()]*?[,\s])?(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?\)\s*$/.exec(f || '') || [])[1] || '';
+$('#camFonte').addEventListener('change', () => { const ip = ipDoNdi($('#camFonte').value); if (ip && !$('#camIp').value.trim()) { $('#camIp').value = ip; camMsg('IP ' + ip + ' tirado do nome da imagem NDI. Confira e salve.'); } });
 $('#camProto').onchange = () => { $('#camPorta').value = PORTAS_PTZ[$('#camProto').value]; };
 $('#btnCamSalvar').onclick = () => {
   const c = camAtual(); if (!c) return;
@@ -1017,14 +1025,27 @@ function renderMiguel(m) {
   if (document.activeElement !== $('#miLocal'))
     $('#miLocal').innerHTML = '<option value="">Todas</option>' + m.locais.filter(l => l.sigla || l.nome)
       .map(l => `<option value="${esc(l.sigla || l.nome)}" ${(l.sigla || l.nome) === m.local ? 'selected' : ''}>${esc(l.sigla ? `${l.sigla} · ${l.nome}` : l.nome)}</option>`).join('');
-  $('#miProximas').innerHTML = m.erro ? '' : m.proximas.length
-    ? m.proximas.map((x, i) => `<div class="ck">${i === 0 ? '<b>' : ''}${esc(x.quandoTxt)}${i === 0 ? '</b> <span class="dica">· na capa</span>' : i === 1 ? ' <span class="dica">· "Próxima Missa"</span>' : ''}<span class="r">${esc(x.nome || '')}${x.roteiro ? ' · roteiro pronto' : ''}</span></div>`).join('')
+  // (0.1.12) cada celebração com a caixa "transmitir"; a escolhida (a da capa) em negrito
+  const algumaMarcada = (m.proximas || []).some(x => x.preparada);
+  const linha = x => `<div class="ck"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-prep="${esc(x.chave)}" ${x.preparada ? 'checked' : ''} title="Transmitir esta celebração">`
+    + `${x.escolhida ? '<b>' : ''}${esc(x.quandoTxt)}${x.escolhida ? '</b> <span class="dica">· vai ao ar (na capa)</span>' : ''}</label>`
+    + `<span class="r">${esc(x.nome || '')}${x.roteiro ? ' · roteiro pronto' : ''}</span></div>`;
+  $('#miProximas').innerHTML = m.erro ? '' : m.proximas.length ? m.proximas.map(linha).join('')
     : '<p class="dica" style="margin:0">Nenhuma celebração com esses filtros nas próximas 2 semanas.</p>';
-  // Início › Depois: as seguintes (a primeira já é a "Próxima celebração" lá em cima)
-  const dep = !m.erro && m.seguir ? m.proximas.slice(1, 5) : [];
-  $('#inProximas').innerHTML = dep.map(x => `<div class="ck">${esc(x.quandoTxt)}<span class="r">${esc(x.nome || '')}${x.roteiro ? ' · roteiro pronto' : ''}</span></div>`).join('');
-  $('#inProximasSem').hidden = dep.length > 0;
+  const lista = !m.erro && m.seguir ? m.proximas.slice(0, 8) : [];
+  $('#inProximas').innerHTML = lista.map(linha).join('');
+  $('#inProximasSem').hidden = lista.length > 0;
+  $('#inProximasDica').hidden = lista.length === 0;
+  // Início › Transmitir: as marcadas (ou todas, se nenhuma marcada)
+  const opc = lista.filter(x => !algumaMarcada || x.preparada);
+  $('#inEscolhaLinha').hidden = opc.length < 2;
+  if (document.activeElement !== $('#inEscolha'))
+    $('#inEscolha').innerHTML = opc.map(x => `<option value="${esc(x.chave)}" ${x.escolhida ? 'selected' : ''}>${esc(x.quandoTxt)}${x.nome ? ' · ' + esc(x.nome) : ''}</option>`).join('');
 }
+document.addEventListener('change', e => {
+  const c = e.target.closest('[data-prep]'); if (c) enviar({ tipo: 'miguelPreparar', chave: c.dataset.prep, sim: c.checked });
+});
+$('#inEscolha').onchange = e => enviar({ tipo: 'miguelEscolher', chave: e.target.value });
 const miCfg = mudar => enviar({ tipo: 'miguelCfg', ...mudar });     // só o que mudou
 $('#miSeguir').onclick = () => miCfg({ seguir: !MI.seguir });
 $('#miSoMissas').onclick = () => miCfg({ soMissas: !MI.soMissas });
@@ -1058,6 +1079,30 @@ function mostrarAtualizacao(m) {
 }
 $('#atuVerificar').onclick = () => { $('#atuMsg').textContent = 'Procurando…'; enviar({ tipo: 'atualizacaoVerificar' }); };
 $('#atuInstalar').onclick = () => { if (!ATU || !ATU.url) return; $('#atuInstalar').disabled = true; enviar({ tipo: 'atualizacaoInstalar', url: ATU.url }); };
+// (0.1.12) nuvem
+const NUV = {};
+function mostrarNuvem(m) {
+  Object.assign(NUV, m);
+  $('#nuvLigar').textContent = m.ligada ? 'Ligado' : 'Desligado'; $('#nuvLigar').classList.toggle('ligado', m.ligada);
+  $('#nuvLigar').disabled = !m.conectado;
+  $('#nuvConta').textContent = m.conectado ? (m.email || 'conectada') : 'não conectada';
+  $('#nuvUltima').textContent = (m.ultima || '—') + (m.resumo ? ' · ' + m.resumo : '');
+  $('#nuvMiguel').hidden = m.conectado || !m.miguel;
+  $('#nuvCliente').hidden = m.conectado;
+  $('#nuvConectar').hidden = m.conectado || !m.temCliente;
+  $('#nuvAgora').hidden = !m.ligada; $('#nuvAgora').disabled = !!m.ocupada;
+  $('#nuvDesconectar').hidden = !m.conectado;
+  $('#nuvReiniciar').hidden = !m.reiniciar;
+  $('#nuvTopo').hidden = !m.ligada;
+}
+$('#nuvLigar').onclick = () => enviar({ tipo: 'nuvemLigar', sim: !NUV.ligada });
+$('#nuvMiguel').onclick = () => enviar({ tipo: 'nuvemUsarMiguel' });
+$('#nuvCliente').onclick = () => enviar({ tipo: 'nuvemCliente' });
+$('#nuvConectar').onclick = () => enviar({ tipo: 'nuvemConectar' });
+$('#nuvAgora').onclick = $('#nuvTopo').onclick = () => enviar({ tipo: 'nuvemAgora' });
+$('#nuvReiniciar').onclick = () => enviar({ tipo: 'nuvemReiniciar' });
+$('#nuvDesconectar').onclick = () => { if (confirm('Desconectar o Cast do Google Drive? Os ajustes ficam aqui e na nuvem.')) enviar({ tipo: 'nuvemDesconectar' }); };
+enviar({ tipo: 'nuvemPedir' });
 $('#novaVersao').onclick = () => { document.querySelector('nav [data-tela="ajustes"]').click(); abrirSecao('backup'); };
 // ---------- cadastros de rosto guardados ----------
 function renderPessoas(m) {
