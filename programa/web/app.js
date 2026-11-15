@@ -785,9 +785,19 @@ function renderRoVivo() {
   $('#rvProximo').textContent = prox ? 'Próximo momento: ' + prox.Nome : (RO.agora >= 0 ? 'Fim do roteiro' : 'Próximo momento');
   $('#rvProximo').disabled = !prox;
   $('#rvAviso').textContent = RO.aviso || '';
-  const ag = $('#rvLista .agora'); if (ag && !RO.rolou?.[RO.agora]) { ag.scrollIntoView({ block: 'nearest' }); }
+  // (0.1.13) rola só DENTRO da lista (scrollIntoView rolava a janela inteira a cada momento passado pelo Stream Dock),
+  // e só se "rolar a lista" estiver ligado
+  const ag = $('#rvLista .agora'), lista = $('#rvLista');
+  if (ag && rvRolar() && !RO.rolou?.[RO.agora]) {
+    const topo = ag.offsetTop - lista.offsetTop, fim = topo + ag.offsetHeight;
+    if (topo < lista.scrollTop) lista.scrollTop = topo;
+    else if (fim > lista.scrollTop + lista.clientHeight) lista.scrollTop = fim - lista.clientHeight;
+  }
   renderVideoBar();
 }
+function rvRolar() { try { return localStorage.getItem('rvRolar') !== '0'; } catch (_) { return true; } }
+$('#rvRolar').checked = rvRolar();
+$('#rvRolar').onchange = e => { try { localStorage.setItem('rvRolar', e.target.checked ? '1' : '0'); } catch (_) {} };
 function renderVideoBar() {
   const m = RO.lista[RO.agora];
   const vid = m?.Tipo === 'video' ? E.cenas.find(c => c.fonte === 'video:' + m.Video) : null;

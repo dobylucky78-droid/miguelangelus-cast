@@ -38,9 +38,11 @@ namespace MiguelAngelusCast.Motor
     {
         // 8930; testes: CAST_PORTA_MIGUEL=outra (para uma cópia do MiguelAngelus)
         public static readonly int Porta = int.TryParse(Environment.GetEnvironmentVariable("CAST_PORTA_MIGUEL"), out var p) && p > 1024 ? p : 8930;
-        static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(2.5) };
+        // (0.1.13) sem proxy: é a rede local da igreja (um proxy do Windows desviaria o pedido para fora)
+        static readonly HttpClient http = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(2.5) };
         static Timer timer;
-        static int ocupado;
+        static int ocupado, falhas;
+        static readonly HashSet<string> avisados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static List<Celebracao> Lista { get; private set; } = new List<Celebracao>();
         public static List<(string nome, string sigla)> Locais { get; private set; } = new List<(string, string)>();
@@ -63,7 +65,7 @@ namespace MiguelAngelusCast.Motor
         public static long SeqAoVivo { get; private set; }          // muda a cada novidade
         public static string ErroAoVivo { get; private set; } = "";
         static Thread linhaVivo;
-        static readonly HttpClient httpVivo = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        static readonly HttpClient httpVivo = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = Timeout.InfiniteTimeSpan };
         static void Escutar()
         {
             while (true)
@@ -83,6 +85,9 @@ namespace MiguelAngelusCast.Motor
                         using var leitor = new System.IO.StreamReader(resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult(), System.Text.Encoding.UTF8);
                         conectou = true; Origem = host; ErroAoVivo = "";
                         Registro.Info("seguindo o telão do MiguelAngelus em " + host);
+                        // (0.1.13) achou o MiguelAngelus (às vezes em outro computador, que o NDI só mostra uns segundos depois de
+                        // abrir): se a agenda ainda não veio, busca agora — antes esperava a próxima volta de 1 minuto
+                        if (Erro != "") _ = Atualizar();
                         // sem nada por 40 s (o MiguelAngelus manda um "pulso" a cada 15 s): a conexão morreu
                         var vigia = new Timer(_ => { try { cancelar.Cancel(); resp.Dispose(); } catch { } }, null, 40000, Timeout.Infinite);
                         try
@@ -137,11 +142,22 @@ namespace MiguelAngelusCast.Motor
             var l = new List<string> { "127.0.0.1" };
             try
             {
-                foreach (var (nome, _) in Ndi.Fontes())
+                foreach (var (nome, origem) in Ndi.Fontes())
                 {
                     var i = nome.IndexOf(" (", StringComparison.Ordinal);
                     if (i > 0 && nome.IndexOf("miguelangelus", StringComparison.OrdinalIgnoreCase) > i && nome.IndexOf("cast", StringComparison.OrdinalIgnoreCase) < 0)
                     {
+                        // (0.1.13) primeiro o endereço IP que o próprio NDI informa ("192.168.0.10:5961"): o nome do computador
+                        // nem sempre se resolve na rede da igreja (rede Pública, sem DNS) — foi o que impediu a agenda e o
+                        // "seguir o telão" de achar o MiguelAngelus do outro computador, embora a imagem NDI chegasse
+                        try
+                        {
+                            var url = origem.url != IntPtr.Zero ? System.Runtime.InteropServices.Marshal.PtrToStringUTF8(origem.url) ?? "" : "";
+                            var ip = url.Split(':')[0].Trim();
+                            if (System.Net.IPAddress.TryParse(ip, out var end) && end.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                                && !l.Contains(ip)) l.Add(ip);
+                        }
+                        catch { }
                         var host = nome.Substring(0, i).Trim();
                         if (!l.Contains(host, StringComparer.OrdinalIgnoreCase)) l.Add(host);
                     }
@@ -161,12 +177,28 @@ namespace MiguelAngelusCast.Motor
                 {
                     string texto;
                     try { texto = await http.GetStringAsync($"http://{host}:{Porta}/api/cast/agenda"); }
-                    catch { continue; }
-                    if (Ler(texto)) { Origem = host; Erro = ""; Lido = DateTime.Now; await BaixarCapas(host); Mudou?.Invoke(); return; }
+                    catch (Exception ex)
+                    {
+                        // (0.1.13) anota no registro (uma vez por endereço) por que não deu: ajuda a descobrir o problema na igreja
+                        if (host != "127.0.0.1" && avisados.Add(host)) Registro.Info("agenda: o MiguelAngelus em " + host + " não respondeu — " + (ex.InnerException?.Message ?? ex.Message));
+                        continue;
+                    }
+                    if (Ler(texto))
+                    {
+                        if (Origem != host || Erro != "") Registro.Info("agenda do MiguelAngelus lida em " + host + " (" + Lista.Count + " celebrações)");
+                        Origem = host; Erro = ""; Lido = DateTime.Now; falhas = 0;
+                        timer?.Change(60000, 60000);
+                        await BaixarCapas(host); Mudou?.Invoke(); return;
+                    }
                 }
                 var tinha = Erro;
                 Erro = "MiguelAngelus não encontrado (aberto, com o Controle pelo celular ligado?)";
                 if (tinha != Erro) Mudou?.Invoke();
+                // (0.1.13) ainda não achou: tenta de novo em 5 s (no primeiro minuto o NDI ainda está descobrindo os
+                // outros computadores); depois de 2 minutos sem achar, volta a 1 vez por minuto
+                falhas++;
+                var prox = falhas <= 24 ? 5000 : 60000;
+                timer?.Change(prox, prox);
             }
             catch (Exception e) { Registro.Erro("agenda do MiguelAngelus", e); }
             finally { Interlocked.Exchange(ref ocupado, 0); }

@@ -19,6 +19,7 @@ Funciona junto com o MiguelAngelus ou sozinho.
 | **0.1.10** | **posição da câmera PTZ salva na cena** (o Cast lê as coordenadas da câmera e guarda na cena, nada é gravado na câmera) · cena no Preview já leva a câmera livre para a posição · chamar a posição pelo Stream Deck · achar/seguir uma pessoa a partir da posição da cena · o momento do roteiro vale mais que a cena |
 | **0.1.11** | **instalador** (como o do MiguelAngelus) e **atualização automática** pelo GitHub, só com instalador assinado |
 | **0.1.12** | **escolher quais celebrações da agenda transmitir** e, no Início, qual vai ao ar · **sincronização pelo Google Drive** (mesma conta e pasta do MiguelAngelus, subpasta Cast; chaves e rostos nunca vão) · aviso de **câmera sem IP**, com o IP tirado do nome NDI |
+| **0.1.13** | **som sem estalos** ("toc toc" na transmissão: reserva de 60 ms entre a mesa e o codificador) · **roteiro e agenda do MiguelAngelus de outro computador** (pelo IP que vem no NDI, sem depender do nome do computador na rede) · ao vivo: a tela **não rola mais** quando o momento muda (Stream Dock); caixa "rolar a lista" |
 
 ## Baixar
 

@@ -172,7 +172,7 @@ namespace MiguelAngelusCast.Motor
                 conv = new NAudio.Dsp.WdlResampler();
                 conv.SetMode(true, 2, false); conv.SetFilterParms(); conv.SetFeedMode(true); conv.SetRates(taxa, Taxa);
             }
-            lock (trava) { ini = qtd = 0; }
+            lock (trava) { ini = qtd = 0; enchendo = true; }
             Nivel2.Zerar(); atraso.Zerar();
         }
 
@@ -238,7 +238,7 @@ namespace MiguelAngelusCast.Motor
         }
 
         // ---------- para o codificador ----------
-        public void Esvaziar() { lock (trava) { ini = qtd = 0; } }
+        public void Esvaziar() { lock (trava) { ini = qtd = 0; enchendo = true; } }
 
         // o som da mesa está abaixado por causa de um vídeo?
         public bool Abaixado => Cfg.AbaixarComVideo && VideoComSom();
@@ -353,19 +353,35 @@ namespace MiguelAngelusCast.Motor
         }
         public object EstadoExtras() { lock (travaExtras) return extras.Values.Select(e => new { id = e.Id, nome = e.Nome, estado = e.Estado }).ToList(); }
 
+        // (0.1.13) colchão de 60 ms: a entrada chega em pacotes de 10–20 ms (WASAPI/ASIO) e o codificador lê de 10 em 10 ms.
+        // Antes o anel começava vazio e cada leitura que pegava o anel "no meio" do pacote completava com silêncio —
+        // um buraco de poucos ms várias vezes por segundo = estalos na transmissão (medido na live de 15/11: ~15/s;
+        // o medidor não mostrava porque mede antes do anel). Agora só lê depois de juntar 60 ms; se esvaziar, junta de novo.
+        bool enchendo = true;
+        const int Colchao = Taxa * 2 * 60 / 1000;                  // 60 ms estéreo
         void LerMesa(float[] dst, int quadros)
         {
             int n = quadros * 2;
             lock (trava)
             {
-                int max = Taxa * 2 / 5;                                // mais de 200 ms guardados: o relógio da placa corre na frente
-                if (qtd > max) { int jogar = qtd - Taxa * 2 / 20; jogar -= jogar % 2; ini = (ini + jogar) % anel.Length; qtd -= jogar; }
+                int max = Taxa * 2 * 250 / 1000;                      // mais de 250 ms guardados: o relógio da placa corre na frente
+                if (qtd > max) { int jogar = qtd - Colchao; jogar -= jogar % 2; ini = (ini + jogar) % anel.Length; qtd -= jogar; Registro.Info("som: a entrada adiantou, descartei " + jogar / 96 + " ms"); }
+                if (enchendo && qtd < Colchao + n) { Array.Clear(dst, 0, n); return; }
+                enchendo = false;
                 int tem = Math.Min(n, qtd); tem -= tem % 2;
                 for (int i = 0; i < tem; i++) dst[i] = anel[(ini + i) % anel.Length];
                 ini = (ini + tem) % anel.Length; qtd -= tem;
-                if (tem < n) Array.Clear(dst, tem, n - tem);
+                if (tem < n)
+                {
+                    // faltou som: termina o bloco descendo suave até zero (sem degrau) e junta o colchão de novo
+                    float ue = tem >= 2 ? dst[tem - 2] : 0, ud = tem >= 2 ? dst[tem - 1] : 0; int resto = (n - tem) / 2;
+                    for (int i = 0; i < resto; i++) { float k = 1f - (i + 1f) / resto; dst[tem + i * 2] = ue * k; dst[tem + i * 2 + 1] = ud * k; }
+                    enchendo = true; faltas++;
+                }
             }
         }
+        int faltas;
+        public int Faltas => faltas;   // quantas vezes o som da entrada faltou (para o registro)
 
         // nível desde a última leitura (dBFS): pico e média
         public (double pe, double pd, double re, double rd) Nivel()

@@ -82,14 +82,23 @@ namespace MiguelAngelusCast.Motor
             int n = quadros * 2;
             lock (trava)
             {
-                int max = Som.Taxa * 2 / 5;
-                if (qtd > max) { int jogar = qtd - Som.Taxa * 2 / 20; jogar -= jogar % 2; ini = (ini + jogar) % anel.Length; qtd -= jogar; }
+                // (0.1.13) mesmo colchão de 60 ms do Som.LerMesa (sem ele, buracos de poucos ms = estalos)
+                int colchao = Som.Taxa * 2 * 60 / 1000, max = Som.Taxa * 2 * 250 / 1000;
+                if (qtd > max) { int jogar = qtd - colchao; jogar -= jogar % 2; ini = (ini + jogar) % anel.Length; qtd -= jogar; }
+                if (enchendo && qtd < colchao + n) { Array.Clear(dst, 0, n); return; }
+                enchendo = false;
                 int tem = Math.Min(n, qtd); tem -= tem % 2;
                 for (int i = 0; i < tem; i++) dst[i] = anel[(ini + i) % anel.Length];
                 ini = (ini + tem) % anel.Length; qtd -= tem;
-                if (tem < n) Array.Clear(dst, tem, n - tem);
+                if (tem < n)
+                {
+                    float ue = tem >= 2 ? dst[tem - 2] : 0, ud = tem >= 2 ? dst[tem - 1] : 0; int resto = (n - tem) / 2;
+                    for (int i = 0; i < resto; i++) { float k = 1f - (i + 1f) / resto; dst[tem + i * 2] = ue * k; dst[tem + i * 2 + 1] = ud * k; }
+                    enchendo = true;
+                }
             }
         }
+        bool enchendo = true;
 
         public void Dispose()
         {
