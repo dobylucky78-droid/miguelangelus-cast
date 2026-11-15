@@ -98,7 +98,9 @@ namespace MiguelAngelusCast.Motor
         static readonly object trava = new object();
         static uint seq;
 
-        public static Task<string> Enviar(CameraCfg c, byte[] cmd) => Enviar(c?.Ip, c?.Porta ?? 0, c?.Protocolo, cmd);
+        // (0.1.14) qualquer comando de fora (controle, joystick, roteiro, posição) interrompe o movimento programado da câmera
+        public static Task<string> Enviar(CameraCfg c, byte[] cmd) { MovimentoPtz.Soltar(c?.Id); return EnviarDoMovimento(c, cmd); }
+        internal static Task<string> EnviarDoMovimento(CameraCfg c, byte[] cmd) => Enviar(c?.Ip, c?.Porta ?? 0, c?.Protocolo, cmd);
 
         public static Task<string> Enviar(string ip, int porta, string protocolo, byte[] cmd) => Task.Run(() =>
         {
@@ -191,14 +193,14 @@ namespace MiguelAngelusCast.Motor
                     var chave = c.Ip + ":" + porta;
                     var t = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
                     lock (esperando) esperando[chave] = t;
-                    var e = await Enviar(c, cmd).ConfigureAwait(false);
+                    var e = await EnviarDoMovimento(c, cmd).ConfigureAwait(false);
                     if (e != null) { lock (esperando) esperando.Remove(chave); return null; }
                     var ok = await Task.WhenAny(t.Task, Task.Delay(1500)).ConfigureAwait(false);
                     lock (esperando) esperando.Remove(chave);
                     return ok == t.Task ? t.Task.Result : null;
                 }
                 // UDP: a resposta volta para a mesma porta de onde saiu o pedido
-                var e2 = await Enviar(c, cmd).ConfigureAwait(false);
+                var e2 = await EnviarDoMovimento(c, cmd).ConfigureAwait(false);
                 if (e2 != null) return null;
                 var fim = DateTime.Now.AddMilliseconds(1500);
                 while (DateTime.Now < fim)
@@ -220,7 +222,7 @@ namespace MiguelAngelusCast.Motor
         static int Nibbles(byte[] d, int de, int n) { int v = 0; for (int i = 0; i < n; i++) v = v << 4 | (d[de + i] & 0x0F); return v; }
 
         // onde a câmera está agora: pan/tilt (8x 09 06 12 FF) e zoom (8x 09 04 47 FF)
-        public static async Task<(PtzCena pos, string erro)> LerPosicao(CameraCfg c)
+        public static async Task<(PtzCena pos, string erro)> LerPosicao(CameraCfg c, bool comZoom = true)
         {
             if (c == null) return (null, "escolha a câmera");
             if (string.IsNullOrWhiteSpace(c.Ip)) return (null, $"a câmera \"{c.Nome}\" está sem IP (Ajustes › Câmeras)");
@@ -231,6 +233,7 @@ namespace MiguelAngelusCast.Motor
             int np = dig == 8 ? 4 : dig == 9 ? 5 : dig == 10 ? 5 : -1, nt = dig - np;
             if (np < 0) return (null, $"resposta de posição estranha da câmera ({dig} dígitos)");
             var p = new PtzCena { Camera = c.Id, NPan = np, NTilt = nt, Pan = Nibbles(pt, 2, np), Tilt = Nibbles(pt, 2 + np, nt), Quando = DateTime.Now.ToString("dd/MM HH:mm") };
+            if (!comZoom) return (p, null);
             var z = await Perguntar(c, new byte[] { 0x81, 0x09, 0x04, 0x47, 0xFF }).ConfigureAwait(false);
             if (z != null && z.Length == 7 && z[1] == 0x50) p.Zoom = Nibbles(z, 2, 4);
             return (p, null);
@@ -239,19 +242,165 @@ namespace MiguelAngelusCast.Motor
         static byte[] Digitos(int v, int n) { var b = new byte[n]; for (int i = n - 1; i >= 0; i--) { b[i] = (byte)(v & 0x0F); v >>= 4; } return b; }
 
         // leva a câmera às coordenadas salvas (primeiro o zoom, depois pan/tilt — são comandos de grupos diferentes e andam juntos)
-        public static async Task<string> IrPara(CameraCfg c, PtzCena p, int velPan = 0x18, int velTilt = 0x14)
+        // doMovimento = quem manda é o próprio movimento programado (não o interrompe)
+        public static async Task<string> IrPara(CameraCfg c, PtzCena p, int velPan = 0x18, int velTilt = 0x14, bool doMovimento = false)
         {
             if (c == null || p == null) return "sem câmera ou sem posição";
+            if (!doMovimento) MovimentoPtz.Soltar(c.Id);
             string e = null;
             if (p.Zoom >= 0)
             {
-                var zc = new List<byte> { 0x81, 0x01, 0x04, 0x47 }; zc.AddRange(Digitos(p.Zoom, 4)); zc.Add(0xFF);
-                e = await Enviar(c, zc.ToArray()).ConfigureAwait(false);
+                e = await Zoom(c, p.Zoom).ConfigureAwait(false);
                 await Task.Delay(40).ConfigureAwait(false);
             }
+            return await PanTilt(c, p, velPan, velTilt).ConfigureAwait(false) ?? e;
+        }
+        internal static Task<string> Zoom(CameraCfg c, int zoom)
+        {
+            var zc = new List<byte> { 0x81, 0x01, 0x04, 0x47 }; zc.AddRange(Digitos(Math.Clamp(zoom, 0, 0xFFFF), 4)); zc.Add(0xFF);
+            return EnviarDoMovimento(c, zc.ToArray());
+        }
+        internal static Task<string> PanTilt(CameraCfg c, PtzCena p, int velPan, int velTilt)
+        {
             var pc = new List<byte> { 0x81, 0x01, 0x06, 0x02, (byte)Math.Clamp(velPan, 1, 0x18), (byte)Math.Clamp(velTilt, 1, 0x14) };
             pc.AddRange(Digitos(p.Pan, p.NPan)); pc.AddRange(Digitos(p.Tilt, p.NTilt)); pc.Add(0xFF);
-            return await Enviar(c, pc.ToArray()).ConfigureAwait(false) ?? e;
+            return EnviarDoMovimento(c, pc.ToArray());
+        }
+    }
+
+    // (0.1.14) Movimento programado da cena (backlog 5.6): quando a cena entra no ar, a câmera anda devagar do ponto inicial
+    // (a posição salva na cena) até o ponto final. Pan/tilt num só comando de posição com velocidades proporcionais à distância
+    // de cada eixo (anda quase em linha reta); o zoom acompanha em passos pequenos, na mesma proporção do caminho já andado
+    // (o Cast pergunta à câmera onde ela está a cada ~¼ s). Vai e volta: repete até a cena sair do ar.
+    // Qualquer outro comando para a mesma câmera (controle, joystick, roteiro, outra cena) interrompe o movimento.
+    public static class MovimentoPtz
+    {
+        sealed class Rodando { public string Cena; public CameraCfg Cam; public System.Threading.CancellationTokenSource Cts; }
+        static readonly Dictionary<string, Rodando> porCam = new Dictionary<string, Rodando>();
+        static readonly int[] velPT = { 1, 1, 2, 4, 8 };          // velocidade VISCA do eixo que anda mais, por nível (1 a 4)
+        static readonly int[] segZoom = { 40, 40, 25, 12, 5 };    // só zoom (sem pan/tilt): duração em segundos por nível
+
+        public static bool Andando(string cena) { lock (porCam) return porCam.Values.Any(r => r.Cena == cena); }
+
+        public static void Iniciar(string cena, CameraCfg cam, PtzCena ini, PtzCena fim, int nivel, bool vaiVolta)
+        {
+            if (cam == null || ini == null || fim == null) return;
+            Soltar(cam.Id);
+            var r = new Rodando { Cena = cena, Cam = cam, Cts = new System.Threading.CancellationTokenSource() };
+            lock (porCam) porCam[cam.Id] = r;
+            Registro.Info($"movimento programado: {cam.Nome} ({ini.Texto()} → {fim.Texto()}, nível {nivel}{(vaiVolta ? ", vai e volta" : "")})");
+            _ = Task.Run(() => Rodar(r, ini.Copia(), fim.Copia(), Math.Clamp(nivel, 1, 4), vaiVolta));
+        }
+        // para o movimento desta câmera (sem frear: o próximo comando, se houver, já manda nela)
+        public static void Soltar(string camId)
+        {
+            if (string.IsNullOrEmpty(camId)) return;
+            Rodando r; lock (porCam) { if (!porCam.TryGetValue(camId, out r)) return; porCam.Remove(camId); }
+            r.Cts.Cancel();
+        }
+        public static void PararCena(string cena)
+        {
+            if (string.IsNullOrEmpty(cena)) return;
+            List<string> cams; lock (porCam) cams = porCam.Where(k => k.Value.Cena == cena).Select(k => k.Key).ToList();
+            foreach (var id in cams) Soltar(id);
+        }
+
+        static int Sinal(int v, int n) { int lim = 1 << (4 * n); return v >= lim / 2 ? v - lim : v; }
+        static int Dp(PtzCena a, PtzCena b) => Sinal(b.Pan, b.NPan) - Sinal(a.Pan, a.NPan);
+        static int Dt(PtzCena a, PtzCena b) => Sinal(b.Tilt, b.NTilt) - Sinal(a.Tilt, a.NTilt);
+        static bool Perto(PtzCena a, PtzCena b, int tol) => Math.Abs(Dp(a, b)) <= tol && Math.Abs(Dt(a, b)) <= tol;
+
+        static async Task Rodar(Rodando r, PtzCena ini, PtzCena fim, int nivel, bool vaiVolta)
+        {
+            var ct = r.Cts.Token; var cam = r.Cam;
+            try
+            {
+                // primeiro, o ponto inicial (normalmente a câmera já está lá: foi no Preview)
+                var (agora, _) = await ViscaRede.LerPosicao(cam, false).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                if (agora == null || !Perto(agora, ini, 8))
+                {
+                    await ViscaRede.IrPara(cam, ini, doMovimento: true).ConfigureAwait(false);
+                    await Chegar(cam, ini, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+                }
+                await Task.Delay(400, ct).ConfigureAwait(false);
+                var de = ini; var para = fim;
+                while (true)
+                {
+                    await Andar(cam, de, para, nivel, ct).ConfigureAwait(false);
+                    if (!vaiVolta) break;
+                    await Task.Delay(1500, ct).ConfigureAwait(false);
+                    (de, para) = (para, de);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception e) { Registro.Erro("movimento programado", e); }
+            finally { lock (porCam) if (porCam.TryGetValue(cam.Id, out var x) && x == r) porCam.Remove(cam.Id); }
+        }
+
+        // espera a câmera chegar (ou parar de mexer)
+        static async Task Chegar(CameraCfg cam, PtzCena alvo, TimeSpan limite, System.Threading.CancellationToken ct)
+        {
+            var fimEm = DateTime.Now + limite; PtzCena ant = null; int parado = 0;
+            while (DateTime.Now < fimEm)
+            {
+                await Task.Delay(250, ct).ConfigureAwait(false);
+                var (p, _) = await ViscaRede.LerPosicao(cam, false).ConfigureAwait(false);
+                if (p == null) continue;
+                if (Perto(p, alvo, 8)) return;
+                if (ant != null && Perto(p, ant, 0)) { if (++parado >= 4) return; } else parado = 0;
+                ant = p;
+            }
+        }
+
+        static async Task Andar(CameraCfg cam, PtzCena de, PtzCena para, int nivel, System.Threading.CancellationToken ct)
+        {
+            int adp = Math.Abs(Dp(de, para)), adt = Math.Abs(Dt(de, para));
+            bool zoom = de.Zoom >= 0 && para.Zoom >= 0 && de.Zoom != para.Zoom;
+            int zUlt = -1;
+            async Task Z(double f)
+            {
+                if (!zoom) return;
+                int z = (int)Math.Round(de.Zoom + (para.Zoom - de.Zoom) * Math.Clamp(f, 0, 1));
+                if (z == zUlt) return; zUlt = z;
+                ct.ThrowIfCancellationRequested();
+                await ViscaRede.Zoom(cam, z).ConfigureAwait(false);
+            }
+            var t0 = DateTime.Now;
+            if (adp + adt > 0)
+            {
+                int v = velPT[nivel], vp, vt;
+                if (adp >= adt) { vp = v; vt = Math.Max(1, (int)Math.Round(v * (double)adt / adp)); }
+                else { vt = Math.Min(v, 0x14); vp = Math.Max(1, (int)Math.Round(vt * (double)adp / adt)); }
+                ct.ThrowIfCancellationRequested();
+                await ViscaRede.PanTilt(cam, para, vp, vt).ConfigureAwait(false);
+                int tol = Math.Max(3, Math.Max(adp, adt) / 100); PtzCena ant = null; int parado = 0;
+                while ((DateTime.Now - t0).TotalMinutes < 10)
+                {
+                    await Task.Delay(220, ct).ConfigureAwait(false);
+                    var (p, _) = await ViscaRede.LerPosicao(cam, false).ConfigureAwait(false);
+                    ct.ThrowIfCancellationRequested();
+                    if (p == null) continue;
+                    double f = adp >= adt ? 1 - Math.Abs(Dp(p, para)) / (double)adp : 1 - Math.Abs(Dt(p, para)) / (double)adt;
+                    await Z(f).ConfigureAwait(false);
+                    if (Perto(p, para, tol)) break;
+                    // parou antes de chegar (bateu no limite, ou alguém mexeu): termina este trecho
+                    if (ant != null && Perto(p, ant, 0)) { if (++parado >= 10 && (DateTime.Now - t0).TotalSeconds > 3) break; } else parado = 0;
+                    ant = p;
+                }
+                await Z(1).ConfigureAwait(false);
+            }
+            else if (zoom)
+            {
+                double dur = segZoom[nivel];
+                while (true)
+                {
+                    double f = (DateTime.Now - t0).TotalSeconds / dur;
+                    await Z(f).ConfigureAwait(false);
+                    if (f >= 1) break;
+                    await Task.Delay(150, ct).ConfigureAwait(false);
+                }
+            }
         }
     }
 }

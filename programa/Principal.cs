@@ -1266,20 +1266,37 @@ namespace MiguelAngelusCast
                 case "camCena": mesa.DefinirCamera(Txt("id"), Txt("camera"), Txt("rastreio"), Txt("pessoa")); break;
                 case "camCenaSalvar":
                     {
-                        var id = Txt("id"); var c = Cameras.Achar(Txt("camera"));
+                        var id = Txt("id"); var c = Cameras.Achar(Txt("camera")); var fim = Sim("fim");
                         ViscaRede.LerPosicao(c).ContinueWith(t => Na(() =>
                         {
                             var (p, erro) = t.Result;
-                            if (p != null) mesa.GravarPtz(id, p);
-                            Enviar(new { tipo = "camCenaMsg", id, texto = p != null ? $"Posição salva na cena ({p.Texto()}). A câmera não guardou nada." : "Não deu para salvar: " + erro + ".", erro = p == null });
+                            if (p != null) mesa.GravarPtz(id, p, fim);
+                            Enviar(new { tipo = "camCenaMsg", id, texto = p != null ? (fim ? $"Ponto final salvo ({p.Texto()}). Quando a cena entrar no ar, a câmera anda até aqui." : $"Posição salva na cena ({p.Texto()}). A câmera não guardou nada.") : "Não deu para salvar: " + erro + ".", erro = p == null });
                         }));
                         break;
                     }
-                case "camCenaEsquecer": mesa.GravarPtz(Txt("id"), null); break;
+                case "camCenaEsquecer": mesa.GravarPtz(Txt("id"), null, Sim("fim")); break;
                 case "camCenaIr":
                     {
-                        var e = roteiro.IrPosicaoDaCena(Txt("id"));
-                        Enviar(new { tipo = "camCenaMsg", id = Txt("id"), texto = e == null ? "Câmera indo para a posição salva na cena." : "Não deu: " + e + ".", erro = e != null });
+                        var fim = Sim("fim");
+                        var e = roteiro.IrPosicaoDaCena(Txt("id"), fim);
+                        Enviar(new { tipo = "camCenaMsg", id = Txt("id"), texto = e == null ? (fim ? "Câmera indo para o ponto final." : "Câmera indo para a posição salva na cena.") : "Não deu: " + e + ".", erro = e != null });
+                        break;
+                    }
+                // (0.1.14) movimento programado da cena
+                case "camCenaMov": mesa.DefinirMovimento(Txt("id"), Num("vel", 2), Sim("vaiVolta")); break;
+                case "camCenaTestar":
+                    {
+                        var e = roteiro.IniciarMovimento(Txt("id"), true);
+                        Enviar(new { tipo = "camCenaMsg", id = Txt("id"), texto = e == null ? "Testando: a câmera vai ao ponto inicial e anda até o ponto final (■ Parar interrompe)." : "Não deu: " + e + ".", erro = e != null });
+                        break;
+                    }
+                case "camCenaParar":
+                    {
+                        MovimentoPtz.PararCena(Txt("id"));
+                        var cam = Cameras.Achar(mesa.CenaPara(Txt("id"))?.Camera);
+                        if (cam != null) { _ = ViscaRede.Enviar(cam, new byte[] { 0x81, 0x01, 0x06, 0x01, 0x01, 0x01, 0x03, 0x03, 0xFF }); _ = ViscaRede.Enviar(cam, new byte[] { 0x81, 0x01, 0x04, 0x07, 0x00, 0xFF }); }
+                        Enviar(new { tipo = "camCenaMsg", id = Txt("id"), texto = "Movimento parado.", erro = false });
                         break;
                     }
                 case "somCena":

@@ -31,7 +31,27 @@ function ccRender() {
   $('#cmCamRastreio').value = c.rastreio || '';
   $('#cmCamPessoa').hidden = !c.rastreio;
   $('#cmCamPessoa').innerHTML = opcoesPessoa(c.pessoa || '', c.rastreio || 'seguir');
+  // (0.1.14) movimento programado: do ponto inicial (a posição salva) ao ponto final; não roda junto com achar/seguir
+  $('#cmCamMovBox').hidden = !!c.rastreio;
+  $('#cmCamFimSit').innerHTML = !c.ptz ? 'salve primeiro a posição (ponto inicial)' : c.ptzFim ? `<span class="cm-cam-ok">● ponto final salvo ${esc(c.ptzFim.quando)}</span>` : 'sem movimento (a câmera fica parada)';
+  $('#cmCamSalvarFim').disabled = !c.ptz;
+  $('#cmCamIrFim').disabled = $('#cmCamEsquecerFim').disabled = $('#cmCamTestar').disabled = !c.ptzFim;
+  $('#cmCamMovVel').value = String(c.movVel || 2);
+  $('#cmCamMovModo').value = c.movVaiVolta ? '1' : '';
 }
+$('#cmCamSalvarFim').onclick = () => {
+  const cam = ccCamAtual(); if (!cam) return;
+  ccMsg('Perguntando à câmera onde ela está…');
+  enviar({ tipo: 'camCenaSalvar', id: CM.alvo, camera: cam.Id, fim: true });
+};
+$('#cmCamIrFim').onclick = () => enviar({ tipo: 'camCenaIr', id: CM.alvo, fim: true });
+$('#cmCamEsquecerFim').onclick = () => { if (confirm('Tirar o movimento desta cena (esquecer o ponto final)?')) enviar({ tipo: 'camCenaEsquecer', id: CM.alvo, fim: true }); };
+$('#cmCamMovVel').onchange = $('#cmCamMovModo').onchange = () => {
+  CC.ultimo = Date.now();
+  enviar({ tipo: 'camCenaMov', id: CM.alvo, vel: +$('#cmCamMovVel').value, vaiVolta: !!$('#cmCamMovModo').value });
+};
+$('#cmCamTestar').onclick = () => enviar({ tipo: 'camCenaTestar', id: CM.alvo });
+$('#cmCamPararMov').onclick = () => enviar({ tipo: 'camCenaParar', id: CM.alvo });
 function ccEnviar() {
   if (!CM.alvo || CM.alvo === '*') return;
   CC.ultimo = Date.now();
@@ -49,6 +69,7 @@ $('#cmCam').onchange = () => {
 };
 $('#cmCamRastreio').onchange = () => {
   $('#cmCamPessoa').hidden = !$('#cmCamRastreio').value;
+  $('#cmCamMovBox').hidden = !!$('#cmCamRastreio').value;
   $('#cmCamPessoa').innerHTML = opcoesPessoa($('#cmCamPessoa').value, $('#cmCamRastreio').value || 'seguir');
   ccEnviar();
 };

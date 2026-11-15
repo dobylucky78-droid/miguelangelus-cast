@@ -160,6 +160,7 @@ namespace MiguelAngelusCast
         // Pos = preset da câmera (escolhido no momento); Coord = posição salva na cena; Tipo = o tipo que vale (ver Montar)
         sealed class Escolha { public string Cena; public CameraCfg Cam; public int Pos = -1; public PtzCena Coord; public string Pessoa; public string Tipo; }
         CameraCfg camAgora;               // câmera do momento no ar (a escolhida)
+        PtzCena coordAgora;               // (0.1.14) a posição salva na cena que o momento no ar usou (movimento programado)
         string tipoAgora = "sem";         // o tipo que valeu no momento do ar
         IEnumerable<Escolha> Opcoes(Momento m)
         {
@@ -343,6 +344,7 @@ namespace MiguelAngelusCast
             tipoAgora = tipo;
             Registro.Info($"roteiro: momento {i + 1} \"{m.Nome}\" ({m.Tipo}{(tipo != m.Tipo ? " → " + tipo + " pela cena" : "")})" + (pronta != null ? " — entrou pela Transição" : ""));
             camAgora = tipo is "sem" or "video" ? null : cam;
+            coordAgora = tipo is "sem" or "video" ? null : esc?.Coord;
             var r = rastreio();
             // fora do seguir/achar, a câmera não segue ninguém (fica parada onde a posição a deixar)
             if (tipo != "seguir" && tipo != "achar" && r != null && r.Real) { r.MudarSeguir(false); r.SoltarAlvo(); }
@@ -423,10 +425,13 @@ namespace MiguelAngelusCast
             if (!cenasVistas) { cenasVistas = true; vistoPreview = pv; vistoPrograma = pg; return; }   // ao abrir o programa, nada se mexe
             if (pg != vistoPrograma)
             {
+                MovimentoPtz.PararCena(vistoPrograma);                    // (0.1.14) saiu do ar: o movimento programado dela para
                 saiuDoAr = vistoPrograma; vistoPrograma = pg;
                 // posta pelo roteiro, ou a preparada por ele entrando pela Transição: o momento cuida da câmera
                 bool doRoteiro = pg != null && (pg == cenaDoRoteiro || (prep != null && prep.Cena == pg)); cenaDoRoteiro = null;
                 if (!doRoteiro && pg != null) CenaNoAr(pg);
+                // (0.1.14) movimento programado: à mão sempre; pelo roteiro, só se o momento usou a posição salva nesta cena
+                if (pg != null) { var cm = mesa.CenaPara(pg); if (!doRoteiro || (tipoAgora == "fixo" && coordAgora != null && cm?.Ptz != null && coordAgora.Pan == cm.Ptz.Pan && coordAgora.Tilt == cm.Ptz.Tilt)) IniciarMovimento(pg, false); }
             }
             if (pv != vistoPreview)
             {
@@ -460,13 +465,29 @@ namespace MiguelAngelusCast
             Aviso = aviso; Avisar();
         }
         // botão "ir para a posição da cena" (painel da cena e Stream Deck): só a câmera, a cena não muda
-        public string IrPosicaoDaCena(string id)
+        public string IrPosicaoDaCena(string id, bool fim = false)
         {
             var cc = mesa.CenaPara(id); var cam = Cameras.Achar(cc?.Camera);
             if (cc == null) return "cena não encontrada";
-            if (cam == null || cc.Ptz == null || cc.Ptz.Camera != cam.Id) return $"a cena \"{cc.Nome}\" não tem posição de câmera salva";
+            var p = fim ? cc.PtzFim : cc.Ptz;
+            if (cam == null || p == null || p.Camera != cam.Id) return fim ? $"a cena \"{cc.Nome}\" não tem ponto final salvo" : $"a cena \"{cc.Nome}\" não tem posição de câmera salva";
             PararRastreioSeFor(cam);
-            _ = ViscaRede.IrPara(cam, cc.Ptz);
+            _ = ViscaRede.IrPara(cam, p);
+            return null;
+        }
+
+        // (0.1.14) movimento programado da cena (ponto inicial = posição salva → ponto final). teste = botão ▶ Testar no painel.
+        // Devolve o erro (null = começou).
+        public string IniciarMovimento(string id, bool teste)
+        {
+            var cc = mesa.CenaPara(id); var cam = Cameras.Achar(cc?.Camera);
+            if (cc == null) return "cena não encontrada";
+            if (cam == null || cc.Ptz == null || cc.Ptz.Camera != cam.Id) return "salve primeiro a posição da cena (ponto inicial)";
+            if (cc.PtzFim == null || cc.PtzFim.Camera != cam.Id) return "salve o ponto final do movimento";
+            if (!teste && cc.Rastreio is "achar" or "seguir") return "a cena está com achar/seguir: o movimento não roda junto";
+            PararRastreioSeFor(cam);
+            MovimentoPtz.Iniciar(id, cam, cc.Ptz, cc.PtzFim, cc.MovVel, cc.MovVaiVolta);
+            if (!teste) { Aviso = $"Cena \"{cc.Nome}\" no ar: {cam.Nome} em movimento até o ponto final" + (cc.MovVaiVolta ? " (vai e volta)." : "."); Avisar(); }
             return null;
         }
 

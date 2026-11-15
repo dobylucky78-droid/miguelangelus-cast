@@ -64,6 +64,7 @@ $('#dlgSobre').onclick = e => {      // clique fora (no fundo escuro) fecha
 $$('nav [data-tela]').forEach(b => b.onclick = () => {
   $$('nav [data-tela]').forEach(x => x.classList.toggle('sel', x === b));
   $$('main > section').forEach(s => s.hidden = s.dataset.tela !== b.dataset.tela);
+  if (typeof aplicarTrava === 'function') aplicarTrava();   // (0.1.14) a trava da tela vale só no Ao vivo
   const rt = b.dataset.tela === 'rastreio';
   enviar({ tipo: 'rtVisivel', sim: rt });
   if (rt) { enviar({ tipo: 'rtAbrir' }); enviar({ tipo: 'camPedir' }); enviar({ tipo: 'rtPessoas' }); }
@@ -90,7 +91,7 @@ if (NO_APP) {
     else if (m.tipo === 'transmissao') renderSaida(m);
     else if (m.tipo === 'nivel') renderNivel(m);
     else if (m.tipo === 'rastreio') renderRastreio(m);
-    else if (m.tipo === 'cameras') { renderCameras(m); renderRtCameras(); if (!document.activeElement?.closest('#roLista')) renderRoLista(); }
+    else if (m.tipo === 'cameras') { renderCameras(m); renderRtCameras(); renderCenas(); if (!document.activeElement?.closest('#roLista')) renderRoLista(); }
     else if (m.tipo === 'camMsg') camMsg(m.texto);
     else if (m.tipo === 'camSel') CAM.sel = m.id;
     else if (m.tipo === 'roteiro') renderRoteiro(m);
@@ -149,27 +150,78 @@ const corEstado = e => e === 'ok' || /^(pronto|tocando|terminou|preparando)/.tes
 
 // (0.1.3) arrastar a cena com o mouse para mudar a ordem (o estado que chega no meio do arrasto espera o fim)
 const ARR = { id: null, ativo: false, pos: -1, pendente: false, suprimir: false, fantasma: null, marca: null };
+
+// (0.1.14) cenas agrupadas pelo "ativo": cada câmera, o telão, a capa, os vídeos… (muitas cenas da mesma câmera, cada
+// uma numa posição, ficavam difíceis de achar). O grupo se fecha com um clique no título; a ordem e as teclas 1 a 9
+// continuam as da lista inteira. Fica só neste computador (localStorage).
+function grupoDaCena(c) {
+  const f = c.fonte || '';
+  if (f.startsWith('ndi:')) {
+    const n = f.slice(4);
+    if (/\(MiguelAngelus Tel[aã]o\)$/i.test(n)) return '📺 Telão do MiguelAngelus';
+    if (/\(MiguelAngelus Letras\)$/i.test(n)) return '𝐀 Letras do MiguelAngelus';
+    const ip = /(\d+\.\d+\.\d+\.\d+)\)?\s*$/.exec(n)?.[1];
+    let cams = []; try { cams = CAM.lista; } catch (_) {}     // (CAM é declarado mais abaixo)
+    const cam = cams.find(k => (k.Fonte && k.Fonte === n) || (ip && k.Ip === ip));
+    return '📷 ' + (cam?.Nome || n.replace(/\s*\(.*$/, ''));
+  }
+  if (f.startsWith('capa:')) return '✠ Capa da live';
+  if (f.startsWith('video:')) return '🎬 Vídeos';
+  if (f.startsWith('imagem:')) return '🖼 Imagens';
+  if (f.startsWith('tela:') || f.startsWith('janela:')) return '🖥 Telas e janelas';
+  if (f.startsWith('web:')) return '🌐 Páginas';
+  return '🎨 Cores e testes';
+}
+const lsCast = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
+const agruparCenas = () => lsCast('cenasAgrupar') !== '0';
+function gruposFechados() { try { return new Set(JSON.parse(lsCast('cenasFechadas') || '[]')); } catch (_) { return new Set(); } }
+
 function renderCenas() {
   if (ARR.ativo) { ARR.pendente = true; return; }
   const cena = id => E.cenas.find(c => c.id === id);
-  $('#nomePv').textContent = cena(E.preview)?.nome || '';
-  $('#nomePg').textContent = (E.emTransicao ? '→ ' + (cena(E.para)?.nome || '') : cena(E.programa)?.nome) || '';
-  $('#cenas').innerHTML = E.cenas.map((c, i) => `
-    <button class="cena ${c.id === E.preview ? 'pv' : ''} ${c.id === E.programa ? 'pg' : ''} ${E.miniaturas ? 'com-mini' : ''}" data-id="${esc(c.id)}" title="${esc(c.estado && c.estado !== 'ok' ? c.estado : '')}">
+  const fech = c => telaoFechado(c) ? ' · ⚠ telão do MiguelAngelus fechado' : '';
+  $('#nomePv').textContent = (cena(E.preview)?.nome || '') + fech(cena(E.preview));
+  $('#nomePg').textContent = ((E.emTransicao ? '→ ' + (cena(E.para)?.nome || '') : cena(E.programa)?.nome) || '') + fech(cena(E.programa));
+  const nova = `<button class="cena nova-btn" id="btnNova">＋ Cena</button>`;
+  $('#cenasAgrupar').checked = agruparCenas();
+  $('#cenas').classList.toggle('agrupadas', agruparCenas());
+  if (!agruparCenas()) { $('#cenas').innerHTML = E.cenas.map((c, i) => htmlCena(c, i)).join('') + nova; }
+  else {
+    const grupos = new Map(), fechados = gruposFechados();
+    E.cenas.forEach((c, i) => { const g = grupoDaCena(c); if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(i); });
+    $('#cenas').innerHTML = [...grupos].map(([g, is]) => {
+      const fechado = fechados.has(g), temPg = is.some(i => E.cenas[i].id === E.programa), temPv = is.some(i => E.cenas[i].id === E.preview);
+      return `<div class="grupo-cenas ${fechado ? 'fechado' : ''}">
+        <button class="grupo-tit" data-grupo="${esc(g)}" title="${fechado ? 'Abrir' : 'Fechar'} o grupo">${fechado ? '▸' : '▾'} ${esc(g)} <span class="dica">${is.length}</span>
+          ${temPg ? '<span class="gm gm-pg">no ar</span>' : ''}${temPv ? '<span class="gm gm-pv">preview</span>' : ''}</button>
+        ${fechado ? '' : `<div class="cenas-g">${is.map(i => htmlCena(E.cenas[i], i)).join('')}</div>`}</div>`;
+    }).join('') + `<div class="cenas-g">${nova}</div>`;
+  }
+  desenharMinis();
+  renderMiniAjuste();
+}
+// (0.1.14) o telão do MiguelAngelus (fonte ou camada) chega preto porque a janela de projeção está fechada/minimizada
+const telaoFechado = c => !!c && [c.estado, ...(c.estCamadas || [])].some(e => /^o tel[aã]o do MiguelAngelus est[aá] fechado/.test(e || ''));
+function htmlCena(c, i) {
+  const aviso = telaoFechado(c) ? `<span class="tipo aviso-telao" title="O MiguelAngelus manda tela preta enquanto a janela de projeção está fechada ou minimizada">⚠ abra o telão no MiguelAngelus</span>` : '';
+  return `
+    <button class="cena ${c.id === E.preview ? 'pv' : ''} ${c.id === E.programa ? 'pg' : ''} ${E.miniaturas ? 'com-mini' : ''}" data-id="${esc(c.id)}" data-i="${i}" title="${esc(c.estado && c.estado !== 'ok' ? c.estado : '')}">
       ${E.miniaturas && i < (mon?.miniMax ?? 40) ? `<canvas class="mini" width="${mon?.miniL || 192}" height="${mon?.miniA || 108}" data-k="${i}"></canvas>` : ''}
       ${i < 9 ? `<span class="n">${i + 1}</span>` : ''}
       <b>${esc(c.nome)}</b>
       <span class="tipo"><span class="dot" style="background:${corEstado(c.estado)}"></span>${esc(nomeTipo(c.fonte))}${c.camadas?.length ? ' · ⧉ ' + c.camadas.length : ''}${c.fonte?.startsWith('video:') && c.estado ? ' · ' + esc(c.estado.replace(/^pronto · /, '')) : ''}</span>
+      ${aviso}
       <span class="acoes"><span data-acao="editar" title="Camadas: outra câmera, logo, selo…">✎</span><span data-acao="esq" title="Para a esquerda">◀</span><span data-acao="dir" title="Para a direita">▶</span><span data-acao="apagar" title="Apagar a cena">✕</span></span>
-    </button>`).join('') + `<button class="cena nova-btn" id="btnNova">＋ Cena</button>`;
-  desenharMinis();
-  renderMiniAjuste();
+    </button>`;
 }
+$('#cenasAgrupar').onchange = e => { lsCast('cenasAgrupar', e.target.checked ? '1' : '0'); renderCenas(); };
 function renderMiniAjuste() { const b = $('#apMini'); if (b) { b.textContent = E.miniaturas ? 'Ligado' : 'Desligado'; b.classList.toggle('ligado', !!E.miniaturas); } }
 $('#apMini').onclick = () => enviar({ tipo: 'miniaturas', on: !E.miniaturas });
 
 $('#cenas').addEventListener('click', e => {
   if (e.target.closest('#btnNova')) return abrirNova();
+  const gt = e.target.closest('[data-grupo]');
+  if (gt) { const f = gruposFechados(), g = gt.dataset.grupo; f.has(g) ? f.delete(g) : f.add(g); lsCast('cenasFechadas', JSON.stringify([...f])); return renderCenas(); }
   const b = e.target.closest('.cena[data-id]'); if (!b) return;
   const acao = e.target.closest('[data-acao]')?.dataset.acao, id = b.dataset.id;
   if (acao === 'apagar') {
@@ -240,7 +292,8 @@ window.addEventListener('pointermove', e => {
   // a cena mais perto do ponteiro; antes ou depois dela, conforme o lado
   const bs = $$('#cenas .cena[data-id]');
   let melhor = null, dist = Infinity;
-  bs.forEach((b, i) => {
+  bs.forEach(b => {
+    const i = +b.dataset.i;    // (0.1.14) posição na lista inteira (com grupos, a ordem na tela não é a da lista)
     const r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     const d = Math.hypot((e.clientX - cx) / r.width, (e.clientY - cy) / r.height * 1.6);
     if (d < dist) { dist = d; melhor = { i, r, depois: e.clientX > cx }; }
@@ -798,6 +851,22 @@ function renderRoVivo() {
 function rvRolar() { try { return localStorage.getItem('rvRolar') !== '0'; } catch (_) { return true; } }
 $('#rvRolar').checked = rvRolar();
 $('#rvRolar').onchange = e => { try { localStorage.setItem('rvRolar', e.target.checked ? '1' : '0'); } catch (_) {} };
+
+// (0.1.14) 🔒 Travar a tela (só no Ao vivo): a janela fica parada onde está — o Stream Dock, o roteiro e as cenas que
+// mudam de tamanho não a deslocam mais, e o Preview e o Programa continuam à vista. As listas de dentro ainda rolam.
+const TRAVA = { on: lsCast('travarTela') === '1', y: 0 };
+function aplicarTrava() {
+  const ativa = TRAVA.on && !$('[data-tela="mesa"]').hidden;
+  const raiz = document.documentElement;
+  if (ativa && !raiz.classList.contains('tela-travada')) TRAVA.y = scrollY;
+  raiz.classList.toggle('tela-travada', ativa);
+  $('#btnTravar').textContent = TRAVA.on ? '🔒 Tela travada' : '🔓 Travar a tela';
+  $('#btnTravar').classList.toggle('ligado', TRAVA.on);
+}
+$('#btnTravar').onclick = () => { TRAVA.on = !TRAVA.on; lsCast('travarTela', TRAVA.on ? '1' : '0'); aplicarTrava(); };
+// travada, ninguém rola a janela (só o programa poderia): volta para onde estava
+window.addEventListener('scroll', () => { if (document.documentElement.classList.contains('tela-travada') && scrollY !== TRAVA.y) scrollTo(scrollX, TRAVA.y); });
+aplicarTrava();
 function renderVideoBar() {
   const m = RO.lista[RO.agora];
   const vid = m?.Tipo === 'video' ? E.cenas.find(c => c.fonte === 'video:' + m.Video) : null;

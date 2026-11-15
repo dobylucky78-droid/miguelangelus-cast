@@ -418,3 +418,15 @@ body.arrastando-cena,body.arrastando-cena *{cursor:grabbing!important}
 #novaVersao:hover{filter:brightness(1.1)}
 /* (0.1.12) caixa "transmitir" das celebrações da agenda */
 [data-prep]{min-height:0;width:18px;height:18px;padding:0;accent-color:var(--ac);cursor:pointer}
+
+/* (0.1.14) cenas agrupadas por câmera / telão / capa… e a trava da tela do Ao vivo */
+.cenas.agrupadas{display:block}
+.cenas-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:4px 0 10px}
+.grupo-tit{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 10px;font-weight:600;background:var(--pn2);border-radius:8px}
+.grupo-tit .gm{font-size:11px;font-weight:600;padding:0 6px;border-radius:6px}
+.grupo-tit .gm-pg{background:var(--vivox);color:var(--vivo);border:1px solid var(--vivo)}
+.grupo-tit .gm-pv{color:var(--ac);border:1px solid var(--ac)}
+.grupo-cenas.fechado{margin-bottom:6px}
+html.tela-travada{overflow:hidden;overflow-anchor:none;scrollbar-gutter:stable}
+#btnTravar{margin-top:8px;width:100%}
+#btnTravar.ligado{border-color:var(--ac);color:var(--ac)}.cena .aviso-telao{color:var(--av);font-weight:600}

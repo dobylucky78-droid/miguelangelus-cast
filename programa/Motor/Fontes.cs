@@ -51,7 +51,10 @@ namespace MiguelAngelusCast.Motor
     {
         readonly string nome; Ndi.Receptor rx; long ultimo; DateTime proxBusca;
         readonly Imagem img = new Imagem(16, 9);
-        public FonteNdi(string nome) { this.nome = nome; Spec = "ndi:" + nome; Estado = "procurando"; }
+        // (0.1.14) o MiguelAngelus manda o telão em 320×180 preto quando a janela de projeção está fechada ou minimizada
+        readonly bool telao;
+        public const string TelaoFechado = "o telão do MiguelAngelus está fechado: abra a projeção";
+        public FonteNdi(string nome) { this.nome = nome; Spec = "ndi:" + nome; Estado = "procurando"; telao = System.Text.RegularExpressions.Regex.IsMatch(nome, @"\(MiguelAngelus Tel[aã]o\)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase); }
 
         public override Imagem Atual()
         {
@@ -62,7 +65,7 @@ namespace MiguelAngelusCast.Motor
                 if (f.nome != null) { rx = new Ndi.Receptor(f.origem, "MiguelAngelus Cast"); Estado = "conectando"; Registro.Info("NDI: recebendo " + nome); }
                 else Estado = Ndi.Erro ?? "procurando";
             }
-            if (rx != null && rx.Pegar(img, ref ultimo)) { Seq++; Estado = "ok"; }
+            if (rx != null && rx.Pegar(img, ref ultimo)) { Seq++; Estado = telao && img.L == 320 && img.A == 180 ? TelaoFechado : "ok"; }
             return img;
         }
         public override void Dispose() { rx?.Dispose(); rx = null; }

@@ -20,6 +20,7 @@ Funciona junto com o MiguelAngelus ou sozinho.
 | **0.1.11** | **instalador** (como o do MiguelAngelus) e **atualização automática** pelo GitHub, só com instalador assinado |
 | **0.1.12** | **escolher quais celebrações da agenda transmitir** e, no Início, qual vai ao ar · **sincronização pelo Google Drive** (mesma conta e pasta do MiguelAngelus, subpasta Cast; chaves e rostos nunca vão) · aviso de **câmera sem IP**, com o IP tirado do nome NDI |
 | **0.1.13** | **som sem estalos** ("toc toc" na transmissão: reserva de 60 ms entre a mesa e o codificador) · **roteiro e agenda do MiguelAngelus de outro computador** (pelo IP que vem no NDI, sem depender do nome do computador na rede) · ao vivo: a tela **não rola mais** quando o momento muda (Stream Dock); caixa "rolar a lista" |
+| **0.1.14** | **cenas agrupadas** por câmera, telão, capa, vídeos… (grupos que abrem e fecham; caixa "agrupar por câmera") · botão **🔒 Travar a tela** no Ao vivo (Preview e Programa não saem da vista) · **movimento de câmera programado**: ponto final na cena, velocidade e "vai e volta", a câmera anda devagar quando a cena entra no ar · aviso de **telão do MiguelAngelus fechado** na cena |
 
 ## Baixar
 

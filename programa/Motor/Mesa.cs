@@ -28,6 +28,10 @@ namespace MiguelAngelusCast.Motor
         public PtzCena Ptz { get; set; }
         public string Rastreio { get; set; } = "";   // "" = fica parada | "achar" = centraliza e para | "seguir" = segue
         public string Pessoa { get; set; } = "";     // id do cadastro guardado (vazio = o maior rosto / o rosto em uso)
+        // (0.1.14) movimento programado: quando a cena entra no ar, a câmera anda devagar da posição salva (Ptz) até PtzFim
+        public PtzCena PtzFim { get; set; }
+        public int MovVel { get; set; } = 2;         // 1 muito lenta | 2 lenta | 3 média | 4 rápida
+        public bool MovVaiVolta { get; set; }        // vai e volta até a cena sair do ar
     }
 
     // Uma fonte de som da cena: "mesa" (a entrada dos Ajustes › Som), "video" (o som dos vídeos) ou "entrada"
@@ -214,6 +218,7 @@ namespace MiguelAngelusCast.Motor
                 Id = "c" + DateTime.Now.Ticks.ToString("x"), Nome = nome, Fonte = o.Fonte, Preencher = o.Preencher,
                 Ret = o.Ret?.ToArray(), SemSobrepor = o.SemSobrepor, Som = o.Som?.Select(s => s.Copia()).ToList(),
                 Camera = o.Camera, Ptz = o.Ptz?.Copia(), Rastreio = o.Rastreio, Pessoa = o.Pessoa,
+                PtzFim = o.PtzFim?.Copia(), MovVel = o.MovVel, MovVaiVolta = o.MovVaiVolta,
                 Camadas = o.Camadas.Select(k => new Camada
                 {
                     Id = "k" + Guid.NewGuid().ToString("N").Substring(0, 8), Nome = k.Nome, Fonte = k.Fonte, X = k.X, Y = k.Y, L = k.L, A = k.A,
@@ -253,16 +258,26 @@ namespace MiguelAngelusCast.Motor
             var c = Cena(id); if (c == null) return;
             camera ??= "";
             if (c.Ptz != null && c.Ptz.Camera != camera) c.Ptz = null;          // trocou de câmera: a posição era da outra
+            if (c.PtzFim != null && c.PtzFim.Camera != camera) c.PtzFim = null;
             c.Rastreio = rastreio is "achar" or "seguir" ? rastreio : "";
             c.Pessoa = pessoa ?? "";
             c.Camera = camera;
             Salvar(); Avisar();
         });
-        public void GravarPtz(string id, PtzCena p) => Fazer(() =>
+        public void GravarPtz(string id, PtzCena p, bool fim = false) => Fazer(() =>
         {
             var c = Cena(id); if (c == null) return;
-            c.Ptz = p?.Copia(); if (p != null) c.Camera = p.Camera;
-            Registro.Info(p != null ? $"posição salva na cena {c.Nome}: {p.Texto()}" : $"posição esquecida na cena {c.Nome}");
+            if (fim) c.PtzFim = p?.Copia(); else c.Ptz = p?.Copia();
+            if (p != null) { c.Camera = p.Camera; if (c.Ptz != null && c.Ptz.Camera != p.Camera) c.Ptz = null; if (c.PtzFim != null && c.PtzFim.Camera != p.Camera) c.PtzFim = null; }
+            var qual = fim ? "ponto final do movimento" : "posição";
+            Registro.Info(p != null ? $"{qual} salvo(a) na cena {c.Nome}: {p.Texto()}" : $"{qual} esquecido(a) na cena {c.Nome}");
+            Salvar(); Avisar();
+        });
+        // (0.1.14) velocidade e modo do movimento programado
+        public void DefinirMovimento(string id, int vel, bool vaiVolta) => Fazer(() =>
+        {
+            var c = Cena(id); if (c == null) return;
+            c.MovVel = Math.Clamp(vel, 1, 4); c.MovVaiVolta = vaiVolta;
             Salvar(); Avisar();
         });
         // a configuração de uma cena para quem está fora da linha da mesa (roteiro, botões): só leitura
@@ -341,7 +356,7 @@ namespace MiguelAngelusCast.Motor
                 {
                     id = c.Id, nome = c.Nome, fonte = c.Fonte, preencher = c.Preencher, estado = Est(c.Fonte),
                     ret = c.Ret, semSobrepor = c.SemSobrepor,
-                    camera = c.Camera ?? "", ptz = c.Ptz == null ? null : new { quando = c.Ptz.Quando, texto = c.Ptz.Texto() }, rastreio = c.Rastreio ?? "", pessoa = c.Pessoa ?? "",
+                    camera = c.Camera ?? "", ptz = c.Ptz == null ? null : new { quando = c.Ptz.Quando, texto = c.Ptz.Texto() }, ptzFim = c.PtzFim == null ? null : new { quando = c.PtzFim.Quando, texto = c.PtzFim.Texto() }, movVel = c.MovVel, movVaiVolta = c.MovVaiVolta,rastreio = c.Rastreio ?? "", pessoa = c.Pessoa ?? "",
                     som = c.Som?.Select(s => new { tipo = s.Tipo, dispositivo = s.Dispositivo, nome = s.Nome, volumeDb = s.VolumeDb, ligada = s.Ligada }), camadas = (c.Camadas ?? new List<Camada>()).Select(Js), estCamadas = (c.Camadas ?? new List<Camada>()).Select(k => Est(k.Fonte))
                 }),
                 sobrepor = Cfg.Sobrepor.Select(Js), estSobrepor = Cfg.Sobrepor.Select(k => Est(k.Fonte)),

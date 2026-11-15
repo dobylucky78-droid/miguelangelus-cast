@@ -97,6 +97,7 @@
             <button data-ef="pagina">Virar página</button>
           </div>
           <label class="c2">Duração <b id="durTxt">0,5 s</b><input id="dur" type="range" min="100" max="3000" step="100" value="500"></label>
+          <button id="btnTravar" class="peq" title="Trava a janela onde está: nada rola sozinho (Stream Dock, roteiro, cenas) e o Preview e o Programa ficam à vista. As listas de dentro continuam rolando. Vale só no Ao vivo.">🔓 Travar a tela</button>
         </div>
         <div class="mon">
           <div class="rot"><span style="color:var(--vivo)">Programa</span><span id="nomePg"></span></div>
@@ -104,7 +105,8 @@
         </div>
       </div>
 
-      <div class="rot" style="margin-top:14px"><span>Cenas <button id="btnSobrepor" class="peq" title="Logo, selo AO VIVO… por cima de todas as cenas (menos as da capa)">🖼 Em todas as cenas</button></span><span class="dica">clique = preview · duplo clique = direto no programa · arraste para mudar a ordem · teclas 1 a 9 = preview · ✎ = camadas</span></div>
+      <div class="rot" style="margin-top:14px"><span>Cenas <button id="btnSobrepor" class="peq" title="Logo, selo AO VIVO… por cima de todas as cenas (menos as da capa)">🖼 Em todas as cenas</button>
+        <label class="dica" title="Junta as cenas de cada câmera, do telão, da capa, dos vídeos… Clique no nome do grupo para fechar ou abrir" style="cursor:pointer;margin-left:6px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" id="cenasAgrupar" style="margin:0;width:auto"> agrupar por câmera</label></span><span class="dica">clique = preview · duplo clique = direto no programa · arraste para mudar a ordem · teclas 1 a 9 = preview · ✎ = camadas</span></div>
       <div id="cenas" class="cenas"></div>
 
       <div id="novaCena" class="pn nova" hidden>
@@ -227,6 +229,25 @@
                 <option value="seguir">seguir: a câmera acompanha a pessoa</option>
               </select>
               <select id="cmCamPessoa" title="Quem achar ou seguir (cadastros guardados na aba Câmera que segue)"></select>
+            </div>
+            <div id="cmCamMovBox" class="cm-cam-mov">
+              <div class="linha" style="align-items:center;margin-top:8px">
+                <b>🎞 Movimento ao entrar no ar</b>
+                <span id="cmCamFimSit" class="dica"></span>
+              </div>
+              <div class="linha" style="align-items:center;flex-wrap:wrap">
+                <button id="cmCamSalvarFim" class="peq" title="Posicione a câmera onde o movimento deve terminar e aperte: o ponto inicial é a posição salva acima">💾 Salvar ponto final</button>
+                <button id="cmCamIrFim" class="peq" title="Leva a câmera até o ponto final (a cena não muda)">▶ Ir</button>
+                <button id="cmCamEsquecerFim" class="peq" title="Tira o movimento desta cena">✕ Sem movimento</button>
+                <select id="cmCamMovVel" title="Velocidade do movimento">
+                  <option value="1">muito lenta</option><option value="2">lenta</option><option value="3">média</option><option value="4">rápida</option>
+                </select>
+                <select id="cmCamMovModo" title="Uma vez: para no ponto final. Vai e volta: repete até a cena sair do ar">
+                  <option value="">uma vez</option><option value="1">vai e volta</option>
+                </select>
+                <button id="cmCamTestar" class="peq" title="A câmera vai ao ponto inicial e faz o movimento (cuidado se ela estiver no ar)">▶ Testar</button>
+                <button id="cmCamPararMov" class="peq" title="Para a câmera onde ela estiver">■ Parar</button>
+              </div>
             </div>
             <div id="cmCamMsg" class="dica" style="min-height:16px"></div>
             <div class="dica">Posicione a câmera (aqui, no joystick ou em Ajustes › Câmeras) e aperte <b>Salvar</b>. Ao pôr a cena no Preview, a câmera já vai para lá, se não estiver no ar; se estiver, vai na Transição. Num momento do Roteiro, o que estiver escolhido no momento vale mais que o da cena.</div>
