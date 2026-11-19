@@ -169,6 +169,17 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .sw{width:30px;height:30px;border-radius:50%;padding:0!important;min-height:0!important;border:2px solid transparent!important}
 .sw.ligado{border-color:#fff!important;box-shadow:0 0 0 2px var(--ac)}
 .cpmarca{display:flex;align-items:center;gap:8px;margin-top:6px}
+.capacfg .rot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.capacfg select{width:100%;box-sizing:border-box}
+#cpModelos button,#cpFundos button,#cpLetras button{padding:4px 9px}
+#cpLetras button{font-size:15px}
+.cpsuggrade{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.cpsuggrade button{padding:0!important;border-radius:8px;overflow:hidden;border:2px solid transparent;background:none;cursor:pointer;display:flex;flex-direction:column;text-align:left}
+.cpsuggrade button:hover{border-color:var(--ac)}
+.cpsuggrade img{width:100%;aspect-ratio:16/9;display:block}
+.cpsuggrade span{font-size:12px;color:var(--su);padding:4px 6px}
+.cpestilo{display:inline-flex;align-items:center;gap:2px}
+.cpestilo .x{padding:2px 6px!important;min-height:0!important}
 .cpmarca span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cpinfo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .cpinfo p{margin:4px 0 0}

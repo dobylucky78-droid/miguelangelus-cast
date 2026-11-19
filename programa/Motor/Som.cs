@@ -365,7 +365,7 @@ namespace MiguelAngelusCast.Motor
             lock (trava)
             {
                 int max = Taxa * 2 * 250 / 1000;                      // mais de 250 ms guardados: o relógio da placa corre na frente
-                if (qtd > max) { int jogar = qtd - Colchao; jogar -= jogar % 2; ini = (ini + jogar) % anel.Length; qtd -= jogar; Registro.Info("som: a entrada adiantou, descartei " + jogar / 96 + " ms"); }
+                if (qtd > max) { int jogar = qtd - Colchao; jogar -= jogar % 2; ini = (ini + jogar) % anel.Length; qtd -= jogar; descartes++; Registro.Info("som: a entrada adiantou, descartei " + jogar / 96 + " ms (descarte nº " + descartes + ")"); }
                 if (enchendo && qtd < Colchao + n) { Array.Clear(dst, 0, n); return; }
                 enchendo = false;
                 int tem = Math.Min(n, qtd); tem -= tem % 2;
@@ -377,11 +377,16 @@ namespace MiguelAngelusCast.Motor
                     float ue = tem >= 2 ? dst[tem - 2] : 0, ud = tem >= 2 ? dst[tem - 1] : 0; int resto = (n - tem) / 2;
                     for (int i = 0; i < resto; i++) { float k = 1f - (i + 1f) / resto; dst[tem + i * 2] = ue * k; dst[tem + i * 2 + 1] = ud * k; }
                     enchendo = true; faltas++;
+                    // (0.1.17) registro com a hora; se virar rajada (o problema antigo), só as 20 primeiras e depois 1 resumo por minuto
+                    var agora = DateTime.Now;
+                    if (faltas <= 20) Registro.Info("som: faltou som da entrada (falta nº " + faltas + ")");
+                    else if ((agora - ultimoResumo).TotalSeconds >= 60) { Registro.Info("som: " + faltas + " faltas desde que o Cast abriu"); ultimoResumo = agora; }
                 }
             }
         }
-        int faltas;
-        public int Faltas => faltas;   // quantas vezes o som da entrada faltou (para o registro)
+        int faltas, descartes; DateTime ultimoResumo;
+        public int Faltas => faltas;         // quantas vezes o som da entrada faltou (cada uma = um estalinho suave)
+        public int Descartes => descartes;   // quantas vezes a entrada adiantou demais e o Cast jogou fora o excesso
 
         // nível desde a última leitura (dBFS): pico e média
         public (double pe, double pd, double re, double rd) Nivel()

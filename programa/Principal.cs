@@ -98,7 +98,7 @@ namespace MiguelAngelusCast
                 mesa.AvisarSom();
                 _ = System.Threading.Tasks.Task.Run(() => { try { som.AtualizarExtras(mesa.EntradasDeSom()); } catch (Exception ex) { Registro.Erro("entradas extras", ex); } });
 
-                relogio.Tick += (s, e) => { Enviar(new { tipo = "numeros", qps = Math.Round(mesa.QpsReal, 1), ms = Math.Round(mesa.MsQuadro, 1), atrasos = mesa.Atrasos }); Enviar(saida.Estado()); };
+                relogio.Tick += (s, e) => { Enviar(new { tipo = "numeros", qps = Math.Round(mesa.QpsReal, 1), ms = Math.Round(mesa.MsQuadro, 1), atrasos = mesa.Atrasos, faltas = som.Faltas, descartes = som.Descartes }); Enviar(saida.Estado()); };
                 relogio.Start();
                 roteiro = new Roteiro(mesa, PrepararRastreio, () => rastreio);
                 roteiro.Mudou += () => { if (rotPendente) return; rotPendente = true; Na(() => { rotPendente = false; EnviarRoteiro(null); }); };
@@ -589,6 +589,10 @@ namespace MiguelAngelusCast
                 tipo = "capa", cfg = c, modo, msg, cenas,
                 corAuto = Capa.CorAuto(c), corUsada = Capa.CorUsada(c), celebracaoAuto = Liturgia.Info(c.Quando).nome,
                 paletas = Capa.Paletas.ToDictionary(p => p.Key, p => new { nome = p.Value.Nome, amostra = ColorTranslator.ToHtml(p.Value.Amostra) }),
+                // (0.1.17) opções da capa e o nome da paróquia que vem do MiguelAngelus
+                modelos = Capa.Modelos.Select(x => new { id = x.id, nome = x.nome }), fundos = Capa.Fundos.Select(x => new { id = x.id, nome = x.nome }),
+                letras = Capa.Letras.Select(x => new { id = x.Key, nome = x.Value.Nome, fonte = x.Value.Tit, estilo = x.Value.TitEstilo == System.Drawing.FontStyle.Italic ? "italic" : "normal" }),
+                temaDia = Temas.DoDia(c.Quando), paroquiaMiguel = Miguel.Paroquia ?? "",
                 arquivo = "capa_" + c.Quando.ToString("yyyy-MM-dd_HHmm") + ".png"
             };
             Enviar(info);
@@ -1127,6 +1131,22 @@ namespace MiguelAngelusCast
                         Capa.Trocar(nova, true);
                     }
                     EnviarCapa(Txt("modo") ?? "capa"); break;
+                case "capaSugestoes":
+                    {
+                        // (0.1.17) 6 combinações que combinam, desenhadas pequenas com os textos de verdade
+                        int semente = m.TryGetProperty("semente", out var se) && se.ValueKind == JsonValueKind.Number ? se.GetInt32() : Environment.TickCount;
+                        var baseCfg = Capa.Cfg;
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                var itens = Capa.Sugerir(baseCfg, 6, semente).Select(e => new { estilo = e, img = Capa.JpegBase64("capa", Capa.ComEstilo(baseCfg, e), 480, 270) }).ToList();
+                                BeginInvoke(new Action(() => Enviar(new { tipo = "capaSug", itens })));
+                            }
+                            catch (Exception e) { Registro.Erro("sugestões da capa", e); }
+                        });
+                        break;
+                    }
                 case "capaImagem":
                     {
                         var qual = Txt("qual");

@@ -82,7 +82,7 @@ if (NO_APP) {
     const m = e.data;
     if (m.tipo === 'quadro') desenharMonitores();
     else if (m.tipo === 'estado') { Object.assign(E, m); renderCenas(); renderEfeitos(); if (typeof camadasEstado === 'function') camadasEstado(); if (typeof renderRoVivo === 'function') { renderRoVivo(); if (!document.activeElement?.closest('#roLista')) renderRoLista(); } }
-    else if (m.tipo === 'numeros') $('#numeros').textContent = `Saída ${E.saida || ''} · ${String(m.qps).replace('.', ',')} q/s · ${String(m.ms).replace('.', ',')} ms por quadro${m.atrasos ? ' · ' + m.atrasos + ' atrasos' : ''}`;
+    else if (m.tipo === 'numeros') $('#numeros').textContent = `Saída ${E.saida || ''} · ${String(m.qps).replace('.', ',')} q/s · ${String(m.ms).replace('.', ',')} ms por quadro${m.atrasos ? ' · ' + m.atrasos + ' atrasos' : ''} · som: ${m.faltas || m.descartes ? `${m.faltas || 0} ${m.faltas === 1 ? 'falta' : 'faltas'} · ${m.descartes || 0} ${m.descartes === 1 ? 'descarte' : 'descartes'}` : 'sem falhas'}`;
     else if (m.tipo === 'versao') { $('#versao').textContent = 'versão ' + m.versao; $('#splashVersao').textContent = 'Versão ' + m.versao; $('#sobreVersao').textContent = 'versão ' + m.versao; }
     else if (m.tipo === 'fontesNdi') { preencherNdi(m.lista, m.erro); if (typeof cmNdi === 'function') cmNdi(m.lista, m.erro); }
     else if (m.tipo === 'camadaImagem') cmImagem(m);
@@ -96,6 +96,7 @@ if (NO_APP) {
     else if (m.tipo === 'camSel') CAM.sel = m.id;
     else if (m.tipo === 'roteiro') renderRoteiro(m);
     else if (m.tipo === 'capa') renderCapa(m);
+    else if (m.tipo === 'capaSug') renderSugestoes(m);
     else if (m.tipo === 'inicio') renderInicio(m);
     else if (m.tipo === 'rede') renderRede(m);
     else if (m.tipo === 'miguel') { splashMiguel(m); renderMiguel(m); }
@@ -914,20 +915,41 @@ const CP_IMG_INFO = {
   simbolo: 'Desenho próprio do Cast (hóstia e cálice), para quando não houver ilustração.'
 };
 function renderCapa(m) {
-  CP.cfg = m.cfg; CP.modo = m.modo || CP.modo; CP.pal = m.paletas;
+  CP.cfg = m.cfg; CP.modo = m.modo || CP.modo; CP.pal = m.paletas; CP.ult = m;
   const c = m.cfg, foco = document.activeElement;
   for (const [id, k] of Object.entries(CP_CAMPOS)) if (foco !== $('#' + id)) $('#' + id).value = c[k] || '';
   if (foco !== $('#cpQuando')) $('#cpQuando').value = (c.Quando || '').slice(0, 16);
   $('#cpQuandoMi').textContent = c.SeguirMiguel ? '· pela agenda do MiguelAngelus, quando ele estiver na rede' : '';
   $('#cpCelAuto').textContent = '· do calendário: ' + m.celebracaoAuto;
   $('#cpCelebracao').placeholder = m.celebracaoAuto;
-  $$('#cpModelos [data-mod]').forEach(b => b.classList.toggle('ligado', b.dataset.mod === c.Modelo));
+  // (0.1.17) modelos, fundos, letras, enfeites, cor da paróquia, marcas e estilos
+  $('#cpModelos').innerHTML = (m.modelos || []).map(x => `<button data-mod="${x.id}" class="${x.id === c.Modelo ? 'ligado' : ''}">${esc(x.nome)}</button>`).join('');
+  $('#cpFundos').innerHTML = (m.fundos || []).map(x => `<button data-fundo="${x.id}" class="${x.id === (c.Fundo || 'padrao') ? 'ligado' : ''}">${esc(x.nome)}</button>`).join('');
+  $('#cpLetras').innerHTML = (m.letras || []).map(x => `<button data-letra="${x.id}" class="${x.id === (c.Letras || 'classica') ? 'ligado' : ''}" style="font-family:'${x.fonte}';font-style:${x.estilo}">${esc(x.nome)}</button>`).join('');
+  const TEMAS = { advento: 'Advento (as velas acesas pela semana)', natal: 'Natal', quaresma: 'Quaresma', pascoa: 'Páscoa', pentecostes: 'Pentecostes', maria: 'Nossa Senhora', jose: 'São José', eucaristia: 'Eucaristia', comum: 'Tempo Comum' };
+  $('#cpFundoInfo').textContent = c.Fundo === 'tema' ? `Pela data da celebração: ${TEMAS[m.temaDia] || m.temaDia}.`
+    : c.Fundo === 'foto' ? (c.Imagem === 'simbolo' ? 'Escolha a ilustração ou a foto (em Imagem, abaixo): sem ela fica o fundo Luz e riscos.' : 'A imagem escolhida em Imagem, bem desfocada, com a cor por cima.')
+    : c.Modelo === 'cartao' ? 'No modelo Cartão, com uma foto ou ilustração escolhida, o fundo é ela desfocada.' : '';
+  if (foco !== $('#cpDivisor')) $('#cpDivisor').value = c.Divisor || 'cruz';
+  if (foco !== $('#cpMoldura')) $('#cpMoldura').value = c.Moldura || 'fio';
+  if (foco !== $('#cpCorPar') && /^#[0-9a-f]{6}$/i.test(c.CorParoquia || '')) $('#cpCorPar').value = c.CorParoquia;
+  $('#cpDestaque').value = c.Destaque || '';
+  if (foco !== $('#cpParoquia')) $('#cpParoquia').value = c.Paroquia || '';
+  $('#cpParoquia').placeholder = m.paroquiaMiguel || 'Paróquia …';
+  $('#cpParMi').textContent = m.paroquiaMiguel ? '· vazio = "' + m.paroquiaMiguel + '", do MiguelAngelus' : '';
+  if (foco !== $('#cpPadroeiro')) $('#cpPadroeiro').value = c.Padroeiro || '';
+  $('#cpMostrarPar').checked = !!c.MostrarParoquia;
+  $('#cpMarcasPos').value = c.MarcasPos || 'texto';
+  $('#cpMarcasTam').value = String(c.MarcasTam === 0.75 || c.MarcasTam === 1.35 ? c.MarcasTam : 1);
+  $('#cpEstilos').innerHTML = (c.Estilos || []).length ? c.Estilos.map((e, i) => `<span class="cpestilo"><button class="peq" data-estilo="${i}" title="Usar este estilo">${esc(e.Nome || 'Estilo ' + (i + 1))}</button><button class="peq x" data-tirar-estilo="${i}" title="Apagar este estilo">✕</button></span>`).join('') : '<span class="dica">Nenhum guardado ainda.</span>';
   $$('#cpImagens [data-img]').forEach(b => b.classList.toggle('ligado', b.dataset.img === c.Imagem));
   $$('#cpModos [data-modo]').forEach(b => b.classList.toggle('ligado', b.dataset.modo === CP.modo));
   const nomeAuto = m.paletas[m.corAuto]?.nome || m.corAuto;
   $('#cpCorInfo').textContent = c.Cor ? `Escolhida à mão: ${m.paletas[c.Cor]?.nome}. O calendário diria ${nomeAuto}.` : `Automática: ${nomeAuto}, pelo calendário litúrgico.`;
   $('#cpCores').innerHTML = `<button data-cor="" class="${c.Cor ? '' : 'ligado'}">Automática</button>` +
-    Object.entries(m.paletas).map(([k, p]) => `<button class="sw ${c.Cor === k ? 'ligado' : ''}" data-cor="${k}" title="${esc(p.nome)}" aria-label="${esc(p.nome)}" style="background:${p.amostra}"></button>`).join('');
+    Object.entries(m.paletas).map(([k, p]) => `<button class="sw ${c.Cor === k ? 'ligado' : ''}" data-cor="${k}" title="${esc(p.nome)}" aria-label="${esc(p.nome)}" style="background:${p.amostra}"></button>`).join('') +
+    `<button class="${c.Cor === 'paroquia' ? 'ligado' : ''}" data-cor="paroquia" title="O fundo na cor da paróquia, em vez da cor litúrgica">Cor da paróquia</button>`;
+  if (c.Cor === 'paroquia') $('#cpCorInfo').textContent = `Cor da paróquia no fundo. O calendário diria ${nomeAuto}.`;
   const arq = c.Imagem === 'folheto' ? c.Folheto : c.Imagem === 'foto' ? c.Foto : '';
   $('#cpEscolherImg').hidden = c.Imagem === 'simbolo';
   $('#cpImgNome').textContent = c.Imagem === 'simbolo' ? '' : (arquivoDe(arq) || 'nenhum arquivo escolhido');
@@ -944,7 +966,45 @@ function capaMudar(f) { if (!CP.cfg) return; f(CP.cfg); enviar({ tipo: 'capaMuda
 for (const [id, k] of Object.entries(CP_CAMPOS)) $('#' + id).addEventListener('input', e => { clearTimeout(CP.tDig); CP.tDig = setTimeout(() => capaMudar(c => c[k] = e.target.value), 350); });
 $('#cpQuando').addEventListener('change', e => { if (e.target.value) capaMudar(c => c.Quando = e.target.value + ':00'); });
 $('#cpModelos').addEventListener('click', e => { const b = e.target.closest('[data-mod]'); if (b) capaMudar(c => c.Modelo = b.dataset.mod); });
-$('#cpCores').addEventListener('click', e => { const b = e.target.closest('[data-cor]'); if (b) capaMudar(c => c.Cor = b.dataset.cor); });
+$('#cpCores').addEventListener('click', e => {
+  const b = e.target.closest('[data-cor]'); if (!b) return;
+  capaMudar(c => { c.Cor = b.dataset.cor; if (c.Cor === 'paroquia' && !/^#[0-9a-f]{6}$/i.test(c.CorParoquia || '')) c.CorParoquia = $('#cpCorPar').value; });
+});
+// (0.1.17) fundo, letras, enfeites, paróquia, marcas, estilos e sugestões
+$('#cpFundos').addEventListener('click', e => { const b = e.target.closest('[data-fundo]'); if (b) capaMudar(c => c.Fundo = b.dataset.fundo); });
+$('#cpLetras').addEventListener('click', e => { const b = e.target.closest('[data-letra]'); if (b) capaMudar(c => c.Letras = b.dataset.letra); });
+$('#cpDivisor').addEventListener('change', e => capaMudar(c => c.Divisor = e.target.value));
+$('#cpMoldura').addEventListener('change', e => capaMudar(c => c.Moldura = e.target.value));
+$('#cpCorPar').addEventListener('change', e => capaMudar(c => c.CorParoquia = e.target.value));
+$('#cpDestaque').addEventListener('change', e => capaMudar(c => { c.Destaque = e.target.value; if (!/^#[0-9a-f]{6}$/i.test(c.CorParoquia || '')) c.CorParoquia = $('#cpCorPar').value; }));
+$('#cpMostrarPar').addEventListener('change', e => capaMudar(c => c.MostrarParoquia = e.target.checked));
+for (const [id, k] of [['cpParoquia', 'Paroquia'], ['cpPadroeiro', 'Padroeiro']])
+  $('#' + id).addEventListener('input', e => { clearTimeout(CP.tDig); CP.tDig = setTimeout(() => capaMudar(c => c[k] = e.target.value), 350); });
+$('#cpMarcasPos').addEventListener('change', e => capaMudar(c => c.MarcasPos = e.target.value));
+$('#cpMarcasTam').addEventListener('change', e => capaMudar(c => c.MarcasTam = +e.target.value));
+const ESTILO_CAMPOS = ['Modelo', 'Fundo', 'Letras', 'Divisor', 'Moldura', 'MarcasPos', 'MarcasTam', 'Cor', 'CorParoquia', 'Destaque', 'MostrarParoquia'];
+const aplicarEstilo = (c, e) => ESTILO_CAMPOS.forEach(k => { if (e[k] !== undefined) c[k] = e[k]; });
+$('#cpEstiloGuardar').onclick = () => {
+  const nome = $('#cpEstiloNome').value.trim() || 'Estilo ' + ((CP.cfg?.Estilos || []).length + 1);
+  capaMudar(c => { const e = { Nome: nome }; ESTILO_CAMPOS.forEach(k => e[k] = c[k]); c.Estilos = (c.Estilos || []).filter(x => x.Nome !== nome).concat([e]); });
+  $('#cpEstiloNome').value = '';
+};
+$('#cpEstilos').addEventListener('click', e => {
+  const u = e.target.closest('[data-estilo]'), t = e.target.closest('[data-tirar-estilo]');
+  if (u) capaMudar(c => aplicarEstilo(c, c.Estilos[+u.dataset.estilo]));
+  else if (t && confirm('Apagar o estilo "' + (CP.cfg.Estilos[+t.dataset.tirarEstilo]?.Nome || '') + '"? A capa continua como está.')) capaMudar(c => c.Estilos.splice(+t.dataset.tirarEstilo, 1));
+});
+CP.sugs = [];
+function pedirSugestoes() { $('#cpSugs').hidden = false; $('#cpSugGrade').innerHTML = '<span class="dica">Desenhando as sugestões…</span>'; enviar({ tipo: 'capaSugestoes', semente: Math.floor(Math.random() * 1e9) }); }
+$('#cpSugerir').onclick = pedirSugestoes;
+$('#cpSugOutras').onclick = pedirSugestoes;
+$('#cpSugFechar').onclick = () => $('#cpSugs').hidden = true;
+function renderSugestoes(m) {
+  CP.sugs = m.itens || [];
+  const nome = (lista, id) => (lista || []).find(x => x.id === id)?.nome || id;
+  $('#cpSugGrade').innerHTML = CP.sugs.map((s, i) => `<button data-sug="${i}" title="Usar esta"><img alt="" src="data:image/jpeg;base64,${s.img}"><span>${[nome(CP.ult?.modelos, s.estilo.Modelo), s.estilo.Modelo === 'faixa' ? '' : nome(CP.ult?.fundos, s.estilo.Fundo), nome(CP.ult?.letras, s.estilo.Letras)].filter(Boolean).map(esc).join(' · ')}</span></button>`).join('');
+}
+$('#cpSugGrade').addEventListener('click', e => { const b = e.target.closest('[data-sug]'); if (b) capaMudar(c => aplicarEstilo(c, CP.sugs[+b.dataset.sug].estilo)); });
 $('#cpImagens').addEventListener('click', e => {
   const b = e.target.closest('[data-img]'); if (!b) return;
   const q = b.dataset.img, arq = q === 'folheto' ? CP.cfg?.Folheto : q === 'foto' ? CP.cfg?.Foto : 'x';

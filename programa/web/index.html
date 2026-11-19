@@ -609,18 +609,32 @@
         <p class="dica" style="margin:0 0 12px">O padrão vale para todas as lives. A cor litúrgica e o nome da celebração saem sozinhos do calendário, pela data. A mesma arte vira a miniatura da live (PNG) e as cenas Tela de espera (com contagem), Abertura e Encerramento.</p>
         <div class="capagrade">
           <div class="pn capacfg">
-            <div class="rot"><span>Modelo</span></div>
-            <div class="linha" id="cpModelos"><button data-mod="arco">Arco</button><button data-mod="sangrada">Imagem inteira</button><button data-mod="central">Central</button></div>
-            <div class="rot" style="margin-top:12px"><span>Cor litúrgica</span></div>
+            <div class="rot"><span>Modelo</span><button class="peq" id="cpSugerir" title="Combinações de modelo, fundo, letras e enfeites que combinam, com os seus textos e imagens">🎲 Sugestões</button></div>
+            <div class="linha" id="cpModelos"></div>
+            <div class="rot" style="margin-top:12px"><span>Fundo</span></div>
+            <div class="linha" id="cpFundos"></div>
+            <div class="dica" id="cpFundoInfo" style="margin-top:4px"></div>
+            <div class="rot" style="margin-top:12px"><span>Letras</span></div>
+            <div class="linha" id="cpLetras"></div>
+            <div class="rot" style="margin-top:12px"><span>Enfeites</span></div>
+            <label class="c2">Divisor abaixo do título<select id="cpDivisor"><option value="cruz">── ✠ ── cruz com filetes</option><option value="ramos">Cruz com ramos</option><option value="filete">Só um filete</option><option value="nenhum">Nenhum</option></select></label>
+            <label class="c2">Moldura<select id="cpMoldura"><option value="fio">Fio fino</option><option value="dupla">Fio duplo</option><option value="cantos">Cantos enfeitados</option><option value="nenhuma">Nenhuma</option></select></label>
+            <div class="rot" style="margin-top:12px"><span>Cor</span></div>
             <div class="dica" id="cpCorInfo" style="margin-bottom:6px"></div>
             <div class="linha" id="cpCores"></div>
+            <div class="linha" style="margin-top:8px;align-items:center"><label class="dica" style="display:flex;align-items:center;gap:6px">Cor da paróquia <input type="color" id="cpCorPar" value="#1f4e8c" style="width:44px;height:28px;padding:0;border:0;background:none"></label>
+              <label class="dica" style="display:flex;align-items:center;gap:6px;white-space:nowrap">nos detalhes <select id="cpDestaque" style="width:auto"><option value="">não (dourado)</option><option value="paroquia">sim</option></select></label></div>
+            <div class="rot" style="margin-top:12px"><span>A paróquia</span></div>
+            <label class="c2">Nome da paróquia <span class="dica" id="cpParMi"></span><input id="cpParoquia"></label>
+            <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:4px"><input type="checkbox" id="cpMostrarPar"> mostrar o nome na capa</label>
+            <label class="c2">Padroeiro(a) <span class="dica">(aparece no modelo Padroeiro, embaixo da imagem)</span><input id="cpPadroeiro" placeholder="São José Operário"></label>
             <div class="rot" style="margin-top:12px"><span>Próxima celebração</span></div>
             <label class="c2">Data e hora <span class="dica" id="cpQuandoMi"></span><input type="datetime-local" id="cpQuando"></label>
             <label class="c2">Celebração <span class="dica" id="cpCelAuto"></span><input id="cpCelebracao" placeholder="automática pelo calendário"></label>
             <label class="c2">Celebrante<input id="cpCelebrante" placeholder="Padre …"></label>
             <div class="rot" style="margin-top:12px"><span>Textos fixos</span></div>
             <label class="c2">Título<input id="cpTitulo"></label>
-            <label class="c2">Chamada <span class="dica">(modelo Arco)</span><input id="cpChamada"></label>
+            <label class="c2">Chamada <span class="dica">(não aparece nos modelos Imagem inteira e Central)</span><input id="cpChamada"></label>
             <label class="c2">Linha extra (opcional)<input id="cpExtra" placeholder="Ano Jubilar Arquidiocesano"></label>
             <label class="c2">Próxima Missa, no Encerramento (opcional)<input id="cpProxima" placeholder="Domingo, 7 de dezembro · 07h00"></label>
             <div class="rot" style="margin-top:12px"><span>Imagem</span></div>
@@ -630,10 +644,23 @@
             <div class="rot" style="margin-top:12px"><span>Marcas</span></div>
             <div class="cpmarca"><button data-marca="marca1"></button><span class="dica"></span><button class="peq" data-escolher="marca1">Escolher…</button></div>
             <div class="cpmarca"><button data-marca="marca2"></button><span class="dica"></span><button class="peq" data-escolher="marca2">Escolher…</button></div>
+            <div class="linha" style="margin-top:6px">
+              <label class="c2" style="flex:1">Lugar<select id="cpMarcasPos"><option value="texto">junto do texto</option><option value="sup-dir">canto de cima, à direita</option><option value="sup-esq">canto de cima, à esquerda</option><option value="inf-dir">canto de baixo, à direita</option><option value="inf-esq">canto de baixo, à esquerda</option></select></label>
+              <label class="c2">Tamanho<select id="cpMarcasTam"><option value="0.75">pequeno</option><option value="1">médio</option><option value="1.35">grande</option></select></label>
+            </div>
+            <div class="rot" style="margin-top:12px"><span>Estilos da paróquia</span></div>
+            <p class="dica" style="margin:0 0 6px">Guarde o jeito da capa (modelo, fundo, letras, enfeites, cor e marcas) para voltar a ele depois, por exemplo um para o Natal. Vai junto com a capa pela nuvem.</p>
+            <div class="linha" id="cpEstilos"></div>
+            <div class="linha" style="margin-top:6px"><input id="cpEstiloNome" placeholder="Nome do estilo (ex.: Natal)" maxlength="40" style="flex:1"><button class="peq" id="cpEstiloGuardar">Guardar este estilo</button></div>
           </div>
           <div class="capaprev">
             <div class="linha"><span class="dica" style="flex:1">Prévia · 1920 × 1080</span><span id="cpModos" class="linha"><button data-modo="capa">Capa</button><button data-modo="espera">Tela de espera</button><button data-modo="fim">Encerramento</button></span></div>
             <div class="capabox"><img id="cpImg" alt="Prévia da capa"></div>
+            <div id="cpSugs" class="pn" hidden>
+              <div class="linha" style="align-items:center"><b style="flex:1">Sugestões para a sua paróquia</b><button class="peq" id="cpSugOutras">🎲 Outras</button><button class="peq" id="cpSugFechar">Fechar</button></div>
+              <p class="dica" style="margin:4px 0 8px">Clique numa para usar. Os textos, a data e as imagens continuam os seus; muda só o jeito.</p>
+              <div class="cpsuggrade" id="cpSugGrade"></div>
+            </div>
             <div class="linha"><button class="prim" id="cpExportar">Exportar PNG</button><button id="cpCenas">Criar as cenas no Ao vivo</button><span class="dica" id="cpMsg" style="flex:1"></span></div>
             <div class="cpinfo">
               <div class="pn"><b>Também vira cena</b><p class="dica">Tela de espera com contagem regressiva até a hora da celebração; Abertura e Encerramento no mesmo padrão. Mudou aqui, muda na cena.</p></div>

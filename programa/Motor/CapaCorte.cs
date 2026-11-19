@@ -116,10 +116,12 @@ namespace MiguelAngelusCast.Motor
                     // quebra própria, só nos espaços (o Windows quebraria "sexta-|feira" no hífen)
                     using var fmt = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces };
                     var palavras = txt.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    // (0.1.17) as letras do estilo da capa da live (a "Clássica" usa Georgia sem itálico, como antes)
+                    var LT = Capa.LetraDe(Capa.Cfg); var estFrase = LT.Tit == "Georgia" ? FontStyle.Regular : LT.TitEstilo;
                     Font fonteFrase = null; var linhas = new System.Collections.Generic.List<string>(); float alt = 0;
                     for (float tam = 104; tam >= 40; tam -= 4)
                     {
-                        fonteFrase?.Dispose(); fonteFrase = new Font("Georgia", tam, FontStyle.Regular, GraphicsUnit.Pixel);
+                        fonteFrase?.Dispose(); fonteFrase = Capa.Fonte(LT.Tit, tam * Math.Min(LT.TitEscala, 1.2f), estFrase, true);
                         linhas.Clear(); var atual = ""; bool largo = false;
                         foreach (var p in palavras)
                         {
@@ -146,8 +148,10 @@ namespace MiguelAngelusCast.Motor
                     }
 
                     // fio dourado + data
-                    using (var ouro = new Pen(Color.FromArgb(212, 169, 58), 4)) g.DrawLine(ouro, W / 2 - 90, yd, W / 2 + 90, yd);
-                    using (var fd = new Font("Segoe UI Semibold", 46, GraphicsUnit.Pixel))
+                    // fio dourado, ou na cor da paróquia quando a capa da live usa a cor dela nos detalhes
+                    var corFio = Capa.Cfg.Destaque == "paroquia" && Capa.CorValida(Capa.Cfg.CorParoquia, out var cpar) ? cpar : Color.FromArgb(212, 169, 58);
+                    using (var ouro = new Pen(corFio, 4)) g.DrawLine(ouro, W / 2 - 90, yd, W / 2 + 90, yd);
+                    using (var fd = Capa.Fonte(LT.Forte, 46, LT.ForteEstilo))
                     using (var cor = new SolidBrush(Color.FromArgb(240, 228, 196)))
                         g.DrawString("Homilia · " + (data ?? "").Trim(), fd, cor, new RectangleF(60, yd + 30, W - 120, 70), new StringFormat { Alignment = StringAlignment.Center });
                 }
