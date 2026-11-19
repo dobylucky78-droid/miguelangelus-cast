@@ -66,6 +66,7 @@ namespace MiguelAngelusCast
                 cw.Settings.IsZoomControlEnabled = false;
                 cw.Settings.AreDevToolsEnabled = Environment.GetEnvironmentVariable("CAST_DEVTOOLS") == "1";
                 cw.SetVirtualHostNameToFolderMapping("cast.local", Path.Combine(Program.Pasta, "web"), CoreWebView2HostResourceAccessKind.Allow);
+                MapearMomentos();
                 cw.WebMessageReceived += (s, e) => { try { Mensagem(e.WebMessageAsJson); } catch (Exception ex) { Registro.Erro("mensagem da tela", ex); } };
 
                 monitores = env.CreateSharedBuffer((ulong)mesa.MonitoresTamanho);
@@ -101,7 +102,7 @@ namespace MiguelAngelusCast
                 relogio.Start();
                 roteiro = new Roteiro(mesa, PrepararRastreio, () => rastreio);
                 roteiro.Mudou += () => { if (rotPendente) return; rotPendente = true; Na(() => { rotPendente = false; EnviarRoteiro(null); }); };
-                relogioRastreio.Tick += (s, e) => { EnviarRastreio(false); try { roteiro.Tick(); EsperaAutomatica(); } catch (Exception ex) { Registro.Erro("roteiro", ex); } };
+                relogioRastreio.Tick += (s, e) => { EnviarRastreio(false); try { roteiro.Tick(); EsperaAutomatica(); GravacaoDoMomento(); } catch (Exception ex) { Registro.Erro("roteiro", ex); } };
                 relogioRastreio.Start();
                 // (0.1.5) botões (Stream Deck / Stream Dock): porta só deste computador
                 Controle.NaTelaFn = f => { var tcs = new System.Threading.Tasks.TaskCompletionSource<object>(); Na(() => { try { tcs.TrySetResult(f()); } catch (Exception ex) { Registro.Erro("botão", ex); tcs.TrySetResult("!erro"); } }); return tcs.Task; };
@@ -600,6 +601,127 @@ namespace MiguelAngelusCast
         }
 
         // ---------- início ----------
+        // (0.1.15) gravação à parte dos momentos marcados (a Homilia vem marcada): começa quando o momento vai ao ar e
+        // para 4 s depois que vem outro (para não cortar a última frase). Só com a live ou a gravação ligadas.
+        int parteMomento = -1; DateTime pararParteEm = DateTime.MaxValue;
+        void GravacaoDoMomento()
+        {
+            int i = roteiro.Agora;
+            var m = i >= 0 && i < roteiro.Lista.Count ? roteiro.Lista[i] : null;
+            bool quer = m != null && m.GravaAParte && saida.GravarMomentos && (saida.AoVivo || saida.Gravando);
+            if (quer)
+            {
+                pararParteEm = DateTime.MaxValue;
+                if (parteMomento != i || saida.ParteNome == null)
+                {
+                    if (parteMomento == i && saida.ParteNome == null && DateTime.Now < tentouParte.AddSeconds(10)) return;   // não insiste a cada tique
+                    parteMomento = i; tentouParte = DateTime.Now;
+                    var e = saida.GravarParte(m.Nome);
+                    roteiro.AvisoExtra(e == null ? $"🎙 Gravando \"{m.Nome}\" à parte (Momentos, na pasta de gravações)." : $"🎙 Não deu para gravar \"{m.Nome}\" à parte: {e}.");
+                }
+            }
+            else if (saida.ParteNome != null)
+            {
+                if (pararParteEm == DateTime.MaxValue) pararParteEm = DateTime.Now.AddSeconds(4);
+                else if (DateTime.Now >= pararParteEm) { var nome = saida.ParteNome; pararParteEm = DateTime.MaxValue; parteMomento = -1; saida.GravarParte(null); roteiro.AvisoExtra($"🎙 \"{nome}\" gravado à parte."); }
+            }
+            else parteMomento = -1;
+            VersaoEmPe();
+        }
+        DateTime tentouParte;
+
+        // (0.1.15) etapa 2: depois da Missa (live e gravação desligadas), a versão em pé dos momentos gravados à parte.
+        // Se a live ou a gravação começar, para na hora e continua depois.
+        DateTime proxEmPe;
+        void VersaoEmPe()
+        {
+            if (saida.AoVivo || saida.Gravando)
+            {
+                if (Vertical.Rodando) { Vertical.Parar(); Registro.Info("versão em pé: interrompida (live ou gravação ligada)"); }
+                if (Cortes.Rodando) { Cortes.Parar(); Registro.Info("transcrição/corte: interrompido (live ou gravação ligada)"); }
+                // (0.1.16) a internet é da transmissão: o envio para a nuvem para e continua depois
+                if (Nuvem.Homilias.Rodando) { Nuvem.Homilias.Parar(); Registro.Info("nuvem das homilias: pausada (live ou gravação ligada)"); }
+                return;
+            }
+            if (Vertical.Rodando || Cortes.Rodando || Nuvem.Homilias.Rodando || DateTime.Now < proxEmPe) return;
+            proxEmPe = DateTime.Now.AddSeconds(15);
+            if (saida.Cfg.FazerEmPe)
+            {
+                var arq = Vertical.Pendente(saida.Cfg.PastaGravacao, saida.ArquivoParte);
+                if (arq != null) { Vertical.Iniciar(arq, CodPosMissa(), () => Na(() => { Enviar(saida.Estado()); EnviarCortesLista(); })); return; }
+                // (0.1.15) etapa 3: depois da versão em pé, a transcrição e as sugestões de corte (se o modelo de fala foi baixado)
+                var emPe = Cortes.TemModelo ? Cortes.Pendente(saida.Cfg.PastaGravacao) : null;
+                if (emPe != null) { Cortes.Iniciar(emPe, () => Na(() => { Enviar(saida.Estado()); EnviarCortesLista(); })); return; }
+            }
+            // (0.1.16) etapa 4: homilias e cortes para a nuvem (a cada 2 min no máximo; o resto do tempo, só olha a pasta)
+            if (Nuvem.Conectado && DateTime.Now >= proxNuvemHom && (Nuvem.Homilias.Pol.EnviarHomilias || Nuvem.Homilias.Pol.EnviarCortes))
+            {
+                proxNuvemHom = DateTime.Now.AddMinutes(2);
+                Nuvem.Homilias.Trabalhar(PastaMomentos, CodPosMissa(), f => saida.Cfg.FazerEmPe && Cortes.Aguardando(f), () => Na(() => { Enviar(saida.Estado()); EnviarNuvemHomilias(); }));
+            }
+        }
+        DateTime proxNuvemHom;
+        // (0.1.16) a parte "☁ Na nuvem" da aba Cortes (o que está lá, espaço, política)
+        void EnviarNuvemHomilias()
+        {
+            var r = Nuvem.Homilias.Ultimo; var p = Nuvem.Homilias.Pol;
+            bool Local(string nome, bool corte) { try { return File.Exists(corte ? Path.Combine(PastaMomentos, "Cortes", nome) : Path.Combine(PastaMomentos, nome)); } catch { return false; } }
+            Enviar(new
+            {
+                tipo = "nuvemHomilias", conectado = Nuvem.Conectado, email = Nuvem.Homilias.Email, lido = r?.Lido.ToString("dd/MM HH:mm"), erro = r?.Erro, url = r?.Url,
+                limiteConta = r?.Limite, usoConta = r?.Uso, usoApp = r?.UsoApp ?? 0, estado = Nuvem.Homilias.Estado, rodando = Nuvem.Homilias.Rodando,
+                politica = p,
+                homilias = r?.Hom.Where(a => a.Nome.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)).Select(a => new
+                {
+                    nome = a.Nome, tamanho = a.Tamanho, quando = a.Quando.ToString("dd/MM/yyyy HH:mm"), local = Local(a.Nome, false),
+                    texto = r.Hom.Any(t => t.Nome.Equals(Path.GetFileNameWithoutExtension(a.Nome) + ".cortes.json", StringComparison.OrdinalIgnoreCase))
+                }),
+                cortes = r?.Cor.Select(a => new { nome = a.Nome, tamanho = a.Tamanho, quando = a.Quando.ToString("dd/MM/yyyy HH:mm"), local = Local(a.Nome, true) })
+            });
+        }
+        void LerNuvemHomilias() => System.Threading.Tasks.Task.Run(async () => { await Nuvem.Homilias.Ler(); Na(EnviarNuvemHomilias); });
+        // (0.1.15) a aba ✂ Cortes toca os vídeos da pasta Momentos por https://momentos.local/ (só leitura, só esta pasta)
+        string momentosMapeado;
+        void MapearMomentos()
+        {
+            try
+            {
+                var cw = web?.CoreWebView2; if (cw == null) return;
+                Directory.CreateDirectory(PastaMomentos);
+                if (momentosMapeado == PastaMomentos) return;
+                if (momentosMapeado != null) cw.ClearVirtualHostNameToFolderMapping("momentos.local");
+                cw.SetVirtualHostNameToFolderMapping("momentos.local", PastaMomentos, CoreWebView2HostResourceAccessKind.Allow);
+                momentosMapeado = PastaMomentos;
+            }
+            catch (Exception ex) { Registro.Erro("mapear Momentos", ex); }
+        }
+        string CodPosMissa() => saida.Cfg.Codificador != "auto" ? saida.Cfg.Codificador : saida.Cfg.CodificadorDetectado ?? "libopenh264";
+        string PastaMomentos => Path.Combine(saida.Cfg.PastaGravacao, "Momentos");
+        // arquivo pedido pela tela: só nomes de dentro da pasta Momentos
+        string NaMomentos(string nome)
+        {
+            if (string.IsNullOrWhiteSpace(nome) || nome.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
+            var f = Path.Combine(PastaMomentos, nome); return File.Exists(f) ? f : null;
+        }
+        void EnviarCortesLista()
+        {
+            var l = new System.Collections.Generic.List<object>();
+            try
+            {
+                if (Directory.Exists(PastaMomentos))
+                    foreach (var f in Directory.GetFiles(PastaMomentos, "*" + Vertical.Sufixo + ".mp4").OrderByDescending(File.GetLastWriteTime))
+                    {
+                        var t = Cortes.Ler(f);
+                        l.Add(new { arquivo = Path.GetFileName(f), nome = Path.GetFileNameWithoutExtension(f).Replace(Vertical.Sufixo, ""), quando = File.GetLastWriteTime(f).ToString("dd/MM HH:mm"), transcrito = t != null, candidatos = t?.Candidatos.Count ?? 0 });
+                    }
+            }
+            catch (Exception ex) { Registro.Erro("lista de cortes", ex); }
+            var cortes = new System.Collections.Generic.List<string>();
+            try { var pc = Path.Combine(PastaMomentos, "Cortes"); if (Directory.Exists(pc)) cortes = Directory.GetFiles(pc, "*.mp4").Where(x => !x.EndsWith(".parcial.mp4")).OrderByDescending(File.GetLastWriteTime).Select(Path.GetFileName).ToList(); } catch { }
+            var yt = YouTube.Shorts;
+            Enviar(new { tipo = "cortesLista", videos = l, cortes = cortes.Select(c => new { nome = c, yt = yt.TryGetValue(c, out var id) ? id : null }), ytConectado = YouTube.Conectado, ytEnviando = YouTube.Enviando, musicas = Cortes.Musicas(PastaMomentos), vinhetas = Cortes.Vinhetas(PastaMomentos), temModelo = Cortes.TemModelo, estado = Cortes.Estado, rodando = Cortes.Rodando || Vertical.Rodando });
+        }
+
         DateTime esperaFeita;   // a celebração em que a tela de espera automática já entrou (não repete)
         void EsperaAutomatica()
         {
@@ -981,7 +1103,9 @@ namespace MiguelAngelusCast
                         var u = Txt("url") ?? "";
                         // (0.1.11) e as páginas oficiais para baixar o programa do Stream Dock e do Stream Deck
                         if (u == "https://pascom-sjo.github.io/" || u == "mailto:contato.miguelangelus@gmail.com" || u.StartsWith("https://www.youtube.com/@SaoJos")
-                            || u == "https://mirabox.net/pages/download" || u == "https://www.elgato.com/s/downloads")
+                            || u == "https://mirabox.net/pages/download" || u == "https://www.elgato.com/s/downloads"
+                            // (0.1.16) a página do Google Cloud para ativar a API do YouTube (vem na mensagem de erro)
+                            || System.Text.RegularExpressions.Regex.IsMatch(u, @"^https://console\.(developers|cloud)\.google\.com/[A-Za-z0-9/._?=&%-]*$"))
                             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
                         break;
                     }
@@ -1226,6 +1350,219 @@ namespace MiguelAngelusCast
                 case "escolherPasta":
                     using (var fb = new FolderBrowserDialog { Description = "Pasta das gravações", SelectedPath = saida.Cfg.PastaGravacao, UseDescriptionForTitle = true })
                         if (fb.ShowDialog(this) == DialogResult.OK) { saida.Cfg.PastaGravacao = fb.SelectedPath; saida.Salvar(); EnviarSaidaCfg(); }
+                    break;
+                case "gravarMomentos": saida.GravarMomentos = Sim("on"); break;
+                case "fazerEmPe": saida.Cfg.FazerEmPe = Sim("on"); saida.Salvar(); if (!saida.Cfg.FazerEmPe) Vertical.Parar(); Enviar(saida.Estado()); break;
+                // (0.1.15) versão em pé de qualquer vídeo gravado (ex.: a Missa baixada do YouTube Studio), com trecho opcional
+                case "emPeArquivo":
+                    {
+                        if (saida.AoVivo || saida.Gravando) { Aviso("A versão em pé roda com a live e a gravação desligadas (o computador é da transmissão)."); break; }
+                        if (Vertical.Rodando) { Aviso("Já está fazendo uma versão em pé; espere terminar."); break; }
+                        double ini = m.TryGetProperty("ini", out var vi) && vi.ValueKind == JsonValueKind.Number ? vi.GetDouble() : -1;
+                        double fim = m.TryGetProperty("fim", out var vf) && vf.ValueKind == JsonValueKind.Number ? vf.GetDouble() : -1;
+                        if (fim > 0 && ini > 0 && fim <= ini) { Aviso("O fim do trecho precisa ser depois do início."); break; }
+                        using var od = new OpenFileDialog { Title = "Vídeo para a versão em pé", Filter = "Vídeos|*.mp4;*.mkv;*.mov;*.webm;*.ts;*.flv|Todos|*.*" };
+                        if (od.ShowDialog(this) != DialogResult.OK) break;
+                        var pm = Path.Combine(saida.Cfg.PastaGravacao, "Momentos"); Directory.CreateDirectory(pm);
+                        string Hm(double s) => s < 0 ? "" : $"{(int)(s / 3600)}h{(int)(s % 3600 / 60):00}m{(int)(s % 60):00}";
+                        var trecho = ini > 0 || fim > 0 ? $" {(ini > 0 ? Hm(ini) : "início")}-{(fim > 0 ? Hm(fim) : "fim")}" : "";
+                        var dest = Path.Combine(pm, Path.GetFileNameWithoutExtension(od.FileName) + trecho + Vertical.Sufixo + ".mp4");
+                        var cod = saida.Cfg.Codificador != "auto" ? saida.Cfg.Codificador : saida.Cfg.CodificadorDetectado ?? "libopenh264";
+                        int atrasoV = m.TryGetProperty("atraso", out var va) && va.ValueKind == JsonValueKind.Number ? Math.Clamp((int)va.GetDouble(), -5000, 5000) : 0;
+                        Vertical.Iniciar(od.FileName, cod, () => Na(() => Enviar(saida.Estado())), ini, fim, dest, atrasoV);
+                        Enviar(saida.Estado());
+                        break;
+                    }
+                // (0.1.15) etapa 3: aba ✂ Cortes
+                case "cortesLista":
+                    MapearMomentos(); EnviarCortesLista(); EnviarNuvemHomilias();
+                    if (Nuvem.Conectado && !Nuvem.Homilias.Rodando && (Nuvem.Homilias.Ultimo == null || (DateTime.Now - Nuvem.Homilias.Ultimo.Lido).TotalMinutes > 5)) LerNuvemHomilias();
+                    break;
+                case "cortesAbrir":
+                    {
+                        var f = NaMomentos(Txt("arquivo")); var t = f == null ? null : Cortes.Ler(f);
+                        Enviar(new { tipo = "cortesTexto", arquivo = Txt("arquivo"), falas = t?.Falas, candidatos = t?.Candidatos, quando = t?.Quando });
+                        break;
+                    }
+                case "corteFala":
+                    {
+                        var f = NaMomentos(Txt("arquivo")); var t = f == null ? null : Cortes.Ler(f); int i = Num("i", -1);
+                        if (t != null && i >= 0 && i < t.Falas.Count && Txt("texto") is string novoTexto) { t.Falas[i].T = novoTexto.Trim(); Cortes.Gravar(f, t); }
+                        break;
+                    }
+                case "corteGerar":
+                    {
+                        var f = NaMomentos(Txt("arquivo"));
+                        if (f == null) { Enviar(new { tipo = "cortesMsg", texto = "Vídeo não encontrado na pasta Momentos." }); break; }
+                        if (saida.AoVivo || saida.Gravando) { Enviar(new { tipo = "cortesMsg", texto = "Os cortes são feitos com a live e a gravação desligadas." }); break; }
+                        if (Vertical.Rodando || Cortes.Rodando) { Enviar(new { tipo = "cortesMsg", texto = "Espere terminar: " + Vertical.Estado }); break; }
+                        double ini = m.TryGetProperty("ini", out var gi) ? gi.GetDouble() : 0, fim = m.TryGetProperty("fim", out var gf) ? gf.GetDouble() : 0;
+                        var mus = Txt("musica"); string musArq = null;
+                        if (!string.IsNullOrWhiteSpace(mus) && mus.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) { var mf = Path.Combine(Cortes.PastaMusicas(PastaMomentos), mus); if (File.Exists(mf)) musArq = mf; }
+                        string Vinheta(string campo) { var v = Txt(campo); if (string.IsNullOrWhiteSpace(v) || v.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null; var vf = Path.Combine(Cortes.PastaVinhetas(PastaMomentos), v); return File.Exists(vf) ? vf : null; }
+                        Cortes.Gerar(f, ini, fim, CodPosMissa(), (saidaArq, erro) => Na(() => { EnviarCortesLista(); if (saidaArq != null) System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + saidaArq + "\""); }), () => Na(() => { Enviar(saida.Estado()); EnviarCortesLista(); }), musArq, Num("volume", 15), Vinheta("abertura"), Vinheta("encerramento"));
+                        break;
+                    }
+                case "cortesModelo":
+                    Cortes.BaixarModelo(() => Na(() => { Enviar(saida.Estado()); EnviarCortesLista(); }));
+                    EnviarCortesLista();
+                    break;
+                case "cortesMusicasPasta":
+                    try { var pmu = Cortes.PastaMusicas(PastaMomentos); Directory.CreateDirectory(pmu); System.Diagnostics.Process.Start("explorer.exe", "\"" + pmu + "\""); } catch (Exception ex) { Registro.Erro("abrir músicas", ex); }
+                    break;
+                case "cortesVinhetasPasta":
+                    try { var pv = Cortes.PastaVinhetas(PastaMomentos); Directory.CreateDirectory(pv); System.Diagnostics.Process.Start("explorer.exe", "\"" + pv + "\""); } catch (Exception ex) { Registro.Erro("abrir vinhetas", ex); }
+                    break;
+                // (0.1.16) parte 4: o corte como Short PRIVADO no YouTube (a equipe confere e publica no Studio)
+                case "corteYouTube":
+                    {
+                        var n = Txt("nome"); string arq = null;
+                        if (!string.IsNullOrWhiteSpace(n) && n.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) { var f = Path.Combine(PastaMomentos, "Cortes", n); if (File.Exists(f)) arq = f; }
+                        if (arq == null) { Enviar(new { tipo = "cortesMsg", texto = "Corte não encontrado na pasta Cortes." }); break; }
+                        if (!YouTube.Conectado) { Enviar(new { tipo = "cortesMsg", texto = "Conecte a conta do YouTube em Ajustes › Transmissão › Conta do YouTube." }); break; }
+                        if (saida.AoVivo || saida.Gravando) { Enviar(new { tipo = "cortesMsg", texto = "O envio para o YouTube espera a live e a gravação desligarem." }); break; }
+                        if (YouTube.Enviando) { Enviar(new { tipo = "cortesMsg", texto = "Já está enviando um corte; espere terminar." }); break; }
+                        var titulo = (Txt("titulo") ?? "").Trim(); var desc = Txt("descricao") ?? "";
+                        if (titulo == "") { Enviar(new { tipo = "cortesMsg", texto = "Escreva um título." }); break; }
+                        var codYt = CodPosMissa();
+                        System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            string msg;
+                            try
+                            {
+                                // o vídeo vai com a capa no 1º segundo (o feed de Shorts mostra o primeiro quadro)
+                                var envio = arq;
+                                if (File.Exists(CapaCorte.Arquivo(arq)))
+                                {
+                                    Na(() => Enviar(new { tipo = "cortesMsg", texto = "▶ pondo a capa no 1º segundo do vídeo…" }));
+                                    try { envio = CapaCorte.ComCapa(arq, codYt); } catch (Exception ex) { Registro.Erro("corte com capa", ex); envio = arq; }
+                                }
+                                var id = await YouTube.EnviarCorte(envio, titulo, desc, p => Na(() => Enviar(new { tipo = "cortesMsg", texto = $"▶ enviando para o YouTube… {p}%" })));
+                                msg = "✔ No YouTube como PRIVADO. Confira no Studio e publique quando o padre aprovar.";
+                                // a capa vai como miniatura (canal precisa ser verificado; nos Shorts o YouTube pode mostrar um quadro do vídeo no feed)
+                                var capa = CapaCorte.Arquivo(arq);
+                                if (File.Exists(capa))
+                                    try { await YouTube.EnviarMiniatura(id, File.ReadAllBytes(capa)); msg += " A capa foi junto."; }
+                                    catch (Exception ex) { msg += " A capa não foi: " + ex.Message; Registro.Erro("YouTube: capa do corte", ex); }
+                                Na(() => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://studio.youtube.com/video/" + id + "/edit") { UseShellExecute = true }));
+                            }
+                            catch (Exception ex) { msg = "Não deu para enviar ao YouTube: " + ex.Message; Registro.Erro("YouTube: enviar corte", ex); }
+                            Na(() => { Enviar(new { tipo = "cortesMsg", texto = msg }); EnviarCortesLista(); });
+                        });
+                        Enviar(new { tipo = "cortesMsg", texto = "▶ preparando o envio para o YouTube…" });
+                        EnviarCortesLista();
+                        break;
+                    }
+                // (0.1.16) capa do corte (brasão, frase, data, fundo do encerramento): sai sozinha ao abrir "Publicar…"
+                case "corteCapa":
+                    {
+                        var n = Txt("nome"); string arq = null;
+                        if (!string.IsNullOrWhiteSpace(n) && n.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) { var f = Path.Combine(PastaMomentos, "Cortes", n); if (File.Exists(f)) arq = f; }
+                        if (arq == null) break;
+                        var pm = PastaMomentos;
+                        var v = Txt("encerramento"); string enc = null;
+                        if (!string.IsNullOrWhiteSpace(v) && v.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) { var vf = Path.Combine(Cortes.PastaVinhetas(pm), v); if (File.Exists(vf)) enc = vf; }
+                        string fraseIn = Txt("frase"), dataIn = Txt("data") ?? "";   // lidos aqui: a mensagem não vive até a tarefa
+                        bool padrao = fraseIn == null;
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                var frase = padrao ? CapaCorte.FrasePadrao(arq, pm) : fraseIn;
+                                var data = padrao ? CapaCorte.DataTexto(CapaCorte.DataPadrao(arq, pm)) : dataIn;
+                                var capa = CapaCorte.Arquivo(arq);
+                                if (!padrao || !File.Exists(capa)) CapaCorte.Gerar(arq, frase, data, enc);
+                                var url = "https://momentos.local/Cortes/" + Uri.EscapeDataString(Path.GetFileName(capa)) + "?v=" + File.GetLastWriteTime(capa).Ticks;
+                                Na(() => Enviar(new { tipo = "corteCapa", nome = n, frase = padrao ? frase : null, data = padrao ? data : null, url }));
+                            }
+                            catch (Exception ex) { Registro.Erro("capa do corte", ex); Na(() => Enviar(new { tipo = "cortesMsg", texto = "Não deu para fazer a capa: " + ex.Message })); }
+                        });
+                        break;
+                    }
+                case "corteYouTubeAbrir":
+                    {
+                        var n = Txt("nome");
+                        if (n != null && YouTube.Shorts.TryGetValue(n, out var id) && System.Text.RegularExpressions.Regex.IsMatch(id ?? "", "^[A-Za-z0-9_-]{6,20}$"))
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://studio.youtube.com/video/" + id + "/edit") { UseShellExecute = true });
+                        break;
+                    }
+                // (0.1.16) parte 5: publicar à mão no Instagram/Facebook (Meta Business Suite) ou no YouTube Studio:
+                // copia a legenda, abre a página e mostra o arquivo na pasta (é só arrastar)
+                case "cortePublicar":
+                    {
+                        var n = Txt("nome"); string arq = null;
+                        if (!string.IsNullOrWhiteSpace(n) && n.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) { var f = Path.Combine(PastaMomentos, "Cortes", n); if (File.Exists(f)) arq = f; }
+                        if (arq == null) { Enviar(new { tipo = "cortesMsg", texto = "Corte não encontrado na pasta Cortes." }); break; }
+                        var legenda = Txt("legenda") ?? "";
+                        try { if (legenda.Trim() != "") Clipboard.SetText(legenda); } catch (Exception ex) { Registro.Erro("copiar legenda", ex); }
+                        var url = Txt("onde") == "youtube" ? "https://studio.youtube.com/" : "https://business.facebook.com/latest/reels_composer";
+                        var codPub = CodPosMissa();
+                        var copiou = legenda.Trim() != "" ? "Legenda copiada (Ctrl+V). " : "";
+                        if (File.Exists(CapaCorte.Arquivo(arq))) Enviar(new { tipo = "cortesMsg", texto = "Pondo a capa no 1º segundo do vídeo…" });
+                        // o vídeo com a capa no 1º segundo (refeito só se a capa ou o corte mudaram)
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            var envio = arq;
+                            try { envio = CapaCorte.ComCapa(arq, codPub); } catch (Exception ex) { Registro.Erro("corte com capa", ex); }
+                            Na(() =>
+                            {
+                                try
+                                {
+                                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+                                    System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + envio + "\"");
+                                }
+                                catch (Exception ex) { Registro.Erro("publicar corte", ex); }
+                                Enviar(new { tipo = "cortesMsg", texto = copiou + "Arraste o vídeo da pasta que abriu para a página" + (envio != arq ? " (já com a capa no 1º segundo)." : ".") });
+                            });
+                        });
+                        break;
+                    }
+                // (0.1.16) ☁ homilias e cortes na nuvem
+                case "nuvemHomLer":
+                    if (!Nuvem.Conectado) { EnviarNuvemHomilias(); break; }
+                    LerNuvemHomilias(); break;
+                case "nuvemHomAbrir":
+                    {
+                        var u = Nuvem.Homilias.Ultimo?.Url;
+                        if (u != null && u.StartsWith("https://drive.google.com/")) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
+                        else Enviar(new { tipo = "cortesMsg", texto = "Clique em ↻ Atualizar primeiro (a pasta ainda não foi lida)." });
+                        break;
+                    }
+                case "nuvemHomBaixar":
+                    {
+                        var n = Txt("nome");
+                        if (string.IsNullOrWhiteSpace(n) || n.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) break;
+                        Nuvem.Homilias.Baixar(n, Sim("corte"), PastaMomentos, () => Na(() => { Enviar(saida.Estado()); EnviarNuvemHomilias(); EnviarCortesLista(); }));
+                        EnviarNuvemHomilias();
+                        break;
+                    }
+                case "nuvemHomLiberar":
+                    Nuvem.Homilias.LiberarEspaco(() => Na(() => { Enviar(saida.Estado()); EnviarNuvemHomilias(); }));
+                    break;
+                case "nuvemHomEnviarAgora":
+                    if (saida.AoVivo || saida.Gravando) { Enviar(new { tipo = "cortesMsg", texto = "O envio para a nuvem espera a live e a gravação desligarem." }); break; }
+                    proxNuvemHom = DateTime.MinValue; proxEmPe = DateTime.MinValue;
+                    break;
+                case "nuvemHomPolitica":
+                    {
+                        var p = new Nuvem.Homilias.Politica
+                        {
+                            EnviarHomilias = Sim("enviarHomilias"), EnviarCortes = Sim("enviarCortes"),
+                            LimiteGb = m.TryGetProperty("limiteGb", out var lg) && lg.ValueKind == JsonValueKind.Number ? lg.GetDouble() : 20,
+                            DiasHomilias = Num("diasHomilias", 30), DiasCortes = Num("diasCortes", 90)
+                        };
+                        System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            var erro = await Nuvem.Homilias.SalvarPolitica(p);
+                            Na(() => { Enviar(new { tipo = "cortesMsg", texto = erro == null ? "✔ Política salva na nuvem (vale para todos os computadores conectados)." : "Política salva só neste computador: " + erro }); EnviarNuvemHomilias(); });
+                        });
+                        break;
+                    }
+                case "cortesPasta":
+                    try { var pc = Path.Combine(PastaMomentos, "Cortes"); Directory.CreateDirectory(pc); System.Diagnostics.Process.Start("explorer.exe", "\"" + pc + "\""); } catch (Exception ex) { Registro.Erro("abrir Cortes", ex); }
+                    break;
+                case "abrirMomentos":
+                    try { var pm = Path.Combine(saida.Cfg.PastaGravacao, "Momentos"); Directory.CreateDirectory(pm); System.Diagnostics.Process.Start("explorer.exe", "\"" + pm + "\""); } catch (Exception ex) { Registro.Erro("abrir Momentos", ex); }
                     break;
                 case "abrirPasta":
                     try { Directory.CreateDirectory(saida.Cfg.PastaGravacao); System.Diagnostics.Process.Start("explorer.exe", "\"" + saida.Cfg.PastaGravacao + "\""); } catch (Exception ex) { Registro.Erro("abrir pasta", ex); }

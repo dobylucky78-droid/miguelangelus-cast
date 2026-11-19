@@ -31,6 +31,9 @@ namespace MiguelAngelusCast
         public string Miguel { get; set; } = "";
         // (0.1.9) seguir/achar: id da pessoa cadastrada (Câmera que segue › Cadastros guardados); vazio = como antes
         public string Pessoa { get; set; } = "";
+        // (0.1.15) gravar este momento num arquivo à parte (cortes para o Instagram); null = automático (só a Homilia)
+        public bool? GravarParte { get; set; }
+        public bool GravaAParte => GravarParte ?? (Tipo != "video" && Roteiro.Normalizar(Nome).Contains(" homilia "));
     }
 
     public sealed class Opcao
@@ -106,6 +109,8 @@ namespace MiguelAngelusCast
             catch (Exception e) { Registro.Erro("gravar roteiros.json", e); }
         }
         void Avisar() => Mudou?.Invoke();
+        // (0.1.15) aviso de quem está fora do roteiro (gravação do momento): vai junto do aviso atual
+        public void AvisoExtra(string t) { Aviso = string.IsNullOrEmpty(Aviso) || Aviso.StartsWith("🎙") ? t : Aviso.Split(" · 🎙")[0] + " · " + t; Avisar(); }
 
         // ---------- perfis ----------
         public void Escolher(string id)

@@ -19,7 +19,7 @@
     <RootNamespace>MiguelAngelusCast</RootNamespace>
     <ApplicationIcon>icone.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>0.1.14</Version>
+    <Version>0.1.16</Version>
     <Product>MiguelAngelus Cast</Product>
     <Description>MiguelAngelus Cast — transmissão de celebrações</Description>
     <Copyright>Copyright (c) 2026 Marcio Aurelio Rios Martins — licença MIT</Copyright>
@@ -37,6 +37,8 @@
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <!-- rastreio: detector YuNet (MIT) e reconhecimento SFace (Apache 2.0) com ONNX Runtime (MIT) -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="web\**\*" CopyToOutputDirectory="PreserveNewest" />

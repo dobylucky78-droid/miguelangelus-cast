@@ -407,7 +407,11 @@ function renderSaida(m) {
   $('#destinos').innerHTML = m.destinos.filter(d => d.ligado).map(d => `<span class="dest ${d.ligado ? '' : 'off'}" title="${esc(d.estado)}${d.quedas ? ' · caiu ' + d.quedas + 'x' : ''}">
     <span class="dot" style="background:${corDest(d.estado)}"></span>${esc(d.nome)}${m.aoVivo ? ' · ' + esc(d.estado) + (d.kbps ? ' · ' + d.kbps + ' kbps' : '') : ''}</span>`).join('')
     || '<span class="dica">Nenhum destino ligado (Ajustes › Transmissão)</span>';
-  $('#saidaInfo').textContent = (m.aoVivo || m.gravando) ? [nomeCod(m.codificador), m.kbps + ' kbps', m.perdidos ? m.perdidos + ' quadros perdidos' : '', m.gravando ? m.arquivo : '', m.erro].filter(Boolean).join(' · ') : '';
+  $('#saidaInfo').textContent = (m.aoVivo || m.gravando) ? [nomeCod(m.codificador), m.kbps + ' kbps', m.perdidos ? m.perdidos + ' quadros perdidos' : '', m.gravando ? m.arquivo : '', m.parte ? `🎙 ${m.parte} à parte ${m.tempoParte}` : '', m.erro].filter(Boolean).join(' · ') : '';
+  if (document.activeElement !== $('#ajGravarMomentos')) $('#ajGravarMomentos').checked = m.gravarMomentos !== false;
+  if (document.activeElement !== $('#ajFazerEmPe')) $('#ajFazerEmPe').checked = m.fazerEmPe !== false;
+  $('#ajVertical').textContent = m.vertical || '';
+  if (!m.aoVivo && !m.gravando && m.vertical && !/^✔/.test(m.vertical)) $('#saidaInfo').textContent = '📱 ' + m.vertical;
   const p = $('#pillSaida'); p.classList.toggle('vivo', m.aoVivo); p.lastElementChild.textContent = m.aoVivo ? 'AO VIVO ' + m.tempoAr : 'Fora do ar';
   $('#pillGrav').hidden = !m.gravando; $('#pillGrav').lastElementChild.textContent = 'Gravando ' + m.tempoGrav;
 }
@@ -460,6 +464,16 @@ $('#ajKbps').onchange = $('#ajCod').onchange = () => enviar({ tipo: 'salvarSaida
 $('#btnTestarCod').onclick = () => { $('#ajCodInfo').textContent = 'testando…'; enviar({ tipo: 'testarCodificadores' }); };
 $('#btnPasta').onclick = () => enviar({ tipo: 'escolherPasta' });
 $('#btnAbrirPasta').onclick = () => enviar({ tipo: 'abrirPasta' });
+$('#ajGravarMomentos').onchange = e => enviar({ tipo: 'gravarMomentos', on: e.target.checked });
+$('#ajFazerEmPe').onchange = e => enviar({ tipo: 'fazerEmPe', on: e.target.checked });
+$('#btnMomentos').onclick = () => enviar({ tipo: 'abrirMomentos' });
+// "1:02:30", "25:10" ou "90" → segundos; vazio = -1
+const seg = t => { t = (t || '').trim().replace(/[hm]/g, ':').replace(/s$/, ''); if (!t) return -1; const p = t.split(':').map(Number); return p.some(isNaN) ? NaN : p.reduce((a, v) => a * 60 + v, 0); };
+$('#btnEmPeArq').onclick = () => {
+  const ini = seg($('#emPeIni').value), fim = seg($('#emPeFim').value);
+  if (isNaN(ini) || isNaN(fim)) return alert('Escreva o trecho como 25:10 ou 1:02:30 (ou deixe em branco).');
+  enviar({ tipo: 'emPeArquivo', ini, fim, atraso: +$('#emPeAtraso').value || 0 });
+};
 // ---------- som ----------
 let SOM = null; const pico = { E: -120, D: -120, tE: 0, tD: 0 };
 const pct = db => Math.max(0, Math.min(100, (db + 60) / 60 * 100));     // -60 dB .. 0 dB
@@ -760,7 +774,11 @@ function renderRoLista() {
       <select data-c="Cena">${opcoesCenas(o.Cena)}</select>
       <span class="campos">${comCam ? `<select data-c="Camera">${opcoesCam(o.Camera)}</select><select data-c="Posicao">${opcoesPos(o.Camera, o.Posicao)}</select>${selPessoa(o, m.Tipo)}` : ''}</span>
       <span class="acoes"><button data-a="sobeOutra" title="Passar esta câmera na frente (o Cast tenta primeiro a de cima)">▲</button><button data-a="desceOutra" title="Deixar esta câmera para depois" ${k === m.Outras.length - 1 ? 'disabled' : ''}>▼</button><button data-a="tiraOutra" title="Tirar esta opção">✕</button></span></div>`).join('');
-    const extra = `<div class="ro-extra" data-i="${i}">${comCam ? `<button class="peq" data-a="outra" title="Outra cena (outra câmera) para este momento: o Cast escolhe a que não está no ar">+ outra câmera</button>` : ''}
+    // (0.1.15) 🎙 gravar à parte (cortes da homilia): automático = só a Homilia
+    const autoGrava = /(^|[^a-z])homilia([^a-z]|$)/.test((m.Nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase());
+    const grava = m.GravarParte ?? autoGrava;
+    const btnGrava = `<button class="peq ${grava ? 'ligado' : ''}" data-a="gravaParte" title="Grava este momento num arquivo à parte (pasta de gravações › Momentos), para fazer cortes para o Instagram. Só com a live ou a gravação ligadas. Clique para trocar: automático (só a Homilia) → sempre → nunca" ${grava ? '' : 'style="opacity:.55"'}>🎙${grava ? ' grava à parte' : m.GravarParte === false ? ' nunca grava' : ''}${m.GravarParte == null && grava ? ' (automático)' : ''}</button>`;
+    const extra = `<div class="ro-extra" data-i="${i}">${comCam ? `<button class="peq" data-a="outra" title="Outra cena (outra câmera) para este momento: o Cast escolhe a que não está no ar">+ outra câmera</button>` : ''}${btnGrava}
       ${RO.seguir ? `<label class="dica">No MiguelAngelus: <input data-c="Miguel" value="${esc(m.Miguel || '')}" placeholder="automático (pelo nome)" title="Como este momento aparece no roteiro do MiguelAngelus, separado por vírgulas (ex.: Glória, Hino de louvor). Vazio = pelo nome do momento."></label>` : ''}</div>`;
     return `<div class="romomento ${i === RO.preparado ? 'prep' : ''}"><div class="rolinha ${i === RO.agora ? 'agora' : ''}" data-i="${i}">
       <span class="n">${i + 1}</span><input data-c="Nome" value="${esc(m.Nome)}">
@@ -778,6 +796,7 @@ $('#roLista').addEventListener('click', e => {
   else if (a === 'desce' && i < RO.lista.length - 1) roMexe(l => { [l[i + 1], l[i]] = [l[i], l[i + 1]]; });
   else if (a === 'tira' && confirm(`Tirar "${RO.lista[i].Nome}" do roteiro?`)) roMexe(l => l.splice(i, 1));
   else if (a === 'segue') roMexe(l => { l[i].Segue = !l[i].Segue; });
+  else if (a === 'gravaParte') roMexe(l => { const g = l[i].GravarParte; l[i].GravarParte = g == null ? true : g === true ? false : null; delete l[i].GravaAParte; });
   else if (a === 'arquivo') enviar({ tipo: 'rotVideo', i });
   // (0.1.9) outra câmera: sugere a próxima câmera cadastrada que ainda não está neste momento
   else if (a === 'outra') roMexe(l => {

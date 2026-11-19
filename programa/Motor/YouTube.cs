@@ -225,9 +225,12 @@ namespace MiguelAngelusCast.Motor
                 "insufficientPermissions" or "forbidden" when msg.Contains("thumbnail", StringComparison.OrdinalIgnoreCase) => "o canal não pode enviar miniaturas personalizadas (precisa estar verificado)",
                 "insufficientPermissions" => "faltou permissão: desconecte e conecte de novo, marcando o acesso ao YouTube",
                 "quotaExceeded" => "a cota diária da API do YouTube acabou; amanhã volta",
-                "accessNotConfigured" or "SERVICE_DISABLED" => "a YouTube Data API v3 não está ativada no projeto do Google Cloud",
+                "accessNotConfigured" or "SERVICE_DISABLED" => "a YouTube Data API v3 não está ativada no projeto do Google Cloud" +
+                    (System.Text.RegularExpressions.Regex.Match(msg, @"https://console\.(?:developers|cloud)\.google\.com/\S+?project=\d+") is { Success: true } lk ? " — ative em " + lk.Value : ""),
                 "invalidScheduledStartTime" => "a data e a hora da capa já passaram",
                 "mediaBodyTooLarge" => "a miniatura passou de 2 MB",
+                "uploadLimitExceeded" => "o canal chegou ao limite de vídeos enviados hoje; amanhã volta",
+                "youtubeSignupRequired" => "a conta conectada não tem canal do YouTube",
                 _ => $"YouTube ({status}){(motivo != "" ? " " + motivo : "")}: {(msg != "" ? msg : texto)}"
             };
         }
@@ -402,6 +405,110 @@ namespace MiguelAngelusCast.Motor
             if (st is not ("live" or "liveStarting")) return false;
             await Transicao(id, "complete");
             return true;
+        }
+
+        // ---------- (0.1.16) corte da homilia como Short, sempre PRIVADO (quem publica é a equipe, no Studio) ----------
+        // O YouTube trata como Short o vídeo em pé de até 3 min. Envio "retomável" em pedaços de 8 MB.
+        static string ArqShorts => Path.Combine(Program.PastaDados, "youtube-cortes.json");
+        static Dictionary<string, string> shorts;
+        /// <summary>nome do corte → id do vídeo no YouTube</summary>
+        public static Dictionary<string, string> Shorts
+        {
+            get
+            {
+                lock (trava)
+                {
+                    if (shorts == null)
+                        try { shorts = File.Exists(ArqShorts) ? new Dictionary<string, string>(JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(ArqShorts)), StringComparer.OrdinalIgnoreCase) : null; } catch { }
+                    return shorts ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                }
+            }
+        }
+        static void MarcarShort(string nome, string id) { lock (trava) { Shorts[nome] = id; try { File.WriteAllText(ArqShorts, JsonSerializer.Serialize(shorts)); } catch { } } }
+        public static volatile bool Enviando;
+
+        static long? FimDoRange(HttpResponseMessage r)
+        {
+            foreach (var h in r.Headers.NonValidated)
+                if (h.Key.Equals("Range", StringComparison.OrdinalIgnoreCase))
+                {
+                    var v = h.Value.ToString(); var i = v.LastIndexOf('-');
+                    if (i > 0 && long.TryParse(v[(i + 1)..].Trim(), out var fim)) return fim;
+                }
+            return null;
+        }
+        public static async Task<string> EnviarShort(string arquivo, string titulo, string descricao, Action<int> pct)
+        {
+            var meta = JsonSerializer.Serialize(new
+            {
+                snippet = new { title = Limpar(titulo, 100), description = Limpar(descricao, 4900), categoryId = "29" },   // 29 = Organizações sem fins lucrativos
+                status = new { privacyStatus = "private", selfDeclaredMadeForKids = false }
+            });
+            long total = new FileInfo(arquivo).Length;
+            Uri sessao = null;
+            for (int t = 0; sessao == null; t++)
+            {
+                var req = new HttpRequestMessage(HttpMethod.Post, "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status")
+                { Content = new StringContent(meta, Encoding.UTF8, "application/json") };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await Acesso());
+                req.Headers.Add("X-Upload-Content-Type", "video/mp4"); req.Headers.Add("X-Upload-Content-Length", total.ToString());
+                using var r = await http.SendAsync(req);
+                if (r.IsSuccessStatusCode) { sessao = r.Headers.Location; if (sessao == null) throw new InvalidOperationException("o YouTube não abriu o envio"); break; }
+                var tx = await r.Content.ReadAsStringAsync();
+                if ((r.StatusCode == HttpStatusCode.Unauthorized || (int)r.StatusCode >= 500) && t < 2) { accessToken = null; await Task.Delay(1500); continue; }
+                throw new InvalidOperationException(Explicar(tx, (int)r.StatusCode));
+            }
+            using var longo = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
+            const int Bloco = 8 * 1024 * 1024;
+            var buf = new byte[Bloco];
+            using var fs = new FileStream(arquivo, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            long enviado = 0; int falhas = 0;
+            static string Id(string json) => (string)JsonNode.Parse(json)?["id"];
+            while (true)
+            {
+                fs.Position = enviado;
+                int n = 0; while (n < Bloco) { int k = await fs.ReadAsync(buf.AsMemory(n, Bloco - n)); if (k <= 0) break; n += k; }
+                HttpResponseMessage resp = null;
+                try
+                {
+                    var req = new HttpRequestMessage(HttpMethod.Put, sessao) { Content = new ByteArrayContent(buf, 0, n) };
+                    req.Content.Headers.ContentRange = n > 0 ? new ContentRangeHeaderValue(enviado, enviado + n - 1, total) : new ContentRangeHeaderValue(total);
+                    resp = await longo.SendAsync(req);
+                }
+                catch (HttpRequestException) when (falhas < 5) { }
+                catch (TaskCanceledException) when (falhas < 5) { }
+                using (resp)
+                {
+                    if (resp != null && (int)resp.StatusCode == 308) { enviado = FimDoRange(resp) is long f ? f + 1 : enviado + n; falhas = 0; pct?.Invoke((int)(enviado * 100 / Math.Max(1, total))); continue; }
+                    if (resp != null && resp.IsSuccessStatusCode) return Id(await resp.Content.ReadAsStringAsync());
+                    if (resp != null && (int)resp.StatusCode < 500) throw new InvalidOperationException(Explicar(await resp.Content.ReadAsStringAsync(), (int)resp.StatusCode));
+                }
+                // caiu a internet ou o YouTube falhou: espera e pergunta até onde chegou
+                if (++falhas > 5) throw new InvalidOperationException("a internet caiu várias vezes durante o envio para o YouTube");
+                await Task.Delay(4000 * falhas);
+                try
+                {
+                    var q = new HttpRequestMessage(HttpMethod.Put, sessao) { Content = new ByteArrayContent(Array.Empty<byte>()) };
+                    q.Content.Headers.ContentRange = new ContentRangeHeaderValue(total);
+                    using var rq = await longo.SendAsync(q);
+                    if ((int)rq.StatusCode == 308) enviado = FimDoRange(rq) is long f ? f + 1 : 0;
+                    else if (rq.IsSuccessStatusCode) return Id(await rq.Content.ReadAsStringAsync());
+                }
+                catch (HttpRequestException) { }
+            }
+        }
+        /// <summary>Envia o corte como Short privado e guarda o id. Devolve o id.</summary>
+        public static async Task<string> EnviarCorte(string arquivo, string titulo, string descricao, Action<int> pct)
+        {
+            Enviando = true;
+            try
+            {
+                var id = await EnviarShort(arquivo, titulo, descricao, pct);
+                MarcarShort(Path.GetFileName(arquivo), id);
+                Registro.Info($"YouTube: corte enviado como Short privado ({id}): {Path.GetFileName(arquivo)}");
+                return id;
+            }
+            finally { Enviando = false; }
         }
 
         static string Limpar(string s, int max)

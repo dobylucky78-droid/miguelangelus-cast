@@ -430,3 +430,21 @@ body.arrastando-cena,body.arrastando-cena *{cursor:grabbing!important}
 html.tela-travada{overflow:hidden;overflow-anchor:none;scrollbar-gutter:stable}
 #btnTravar{margin-top:8px;width:100%}
 #btnTravar.ligado{border-color:var(--ac);color:var(--ac)}.cena .aviso-telao{color:var(--av);font-weight:600}
+.ro-extra .ligado{border-color:var(--ac);color:var(--ac)}
+/* (0.1.15) aba ✂ Cortes */
+.ctgrade{display:grid;grid-template-columns:260px minmax(300px,420px) 1fr;gap:14px;align-items:start}
+@media (max-width:1100px){.ctgrade{grid-template-columns:1fr}}
+.ct-videos{display:flex;flex-direction:column;gap:6px}
+.ct-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;padding:8px 10px}
+.ct-item.sel{border-color:var(--ac);background:var(--acx)}
+#ctVideo{width:100%;max-height:68vh;background:#000;border-radius:8px;aspect-ratio:9/16;object-fit:contain}
+.ct-trecho{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.ct-cand{border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.ct-cand-txt{font-size:13px;margin-top:4px;max-height:7.5em;overflow:auto}
+.ct-falas{max-height:60vh;overflow:auto}
+.ct-fala{display:grid;grid-template-columns:48px 1fr;gap:8px;padding:3px 6px;border-radius:6px;cursor:pointer;font-size:14px}
+.ct-fala:hover{background:var(--pn2)}
+.ct-fala .t{color:var(--su);font-variant-numeric:tabular-nums}
+.ct-fala.sug .t{color:var(--ac)}
+.ct-fala.marcada{background:var(--acx);outline:1px solid var(--ac)}
+.ct-fala .x[contenteditable="true"]{outline:1px dashed var(--ac);background:var(--pn);cursor:text}

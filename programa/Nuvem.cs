@@ -27,7 +27,7 @@ using System.Threading.Tasks;
 
 namespace MiguelAngelusCast
 {
-    static class Nuvem
+    static partial class Nuvem
     {
         const string Escopo = "https://www.googleapis.com/auth/drive.file";
         const string Api = "https://www.googleapis.com/drive/v3/";

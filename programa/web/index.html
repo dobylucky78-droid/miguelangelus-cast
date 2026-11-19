@@ -73,6 +73,7 @@
       <button class="navb sel" data-tela="mesa">Ao vivo</button>
       <button class="navb" data-tela="rastreio">Câmera que segue</button>
       <button class="navb" data-tela="roteiro">Roteiro</button>
+      <button class="navb" data-tela="cortes" title="Homilia em pé, transcrição e cortes para o Instagram">✂ Cortes</button>
       <button class="navb" data-tela="ajustes">Ajustes</button>
     </nav>
     <div class="espaco"></div>
@@ -451,6 +452,95 @@
         </div>
       </div>
     </section>
+    <section data-tela="cortes" hidden>
+      <div class="ctgrade">
+        <div class="pn ct-lado">
+          <div class="rot">Homilias em pé <button id="ctPasta" class="peq" style="float:right">Abrir os cortes</button></div>
+          <div id="ctVideos" class="ct-videos"></div>
+          <div id="ctModelo" class="dica" hidden>
+            Para transcrever e sugerir cortes, o Cast precisa do <b>modelo de fala</b> (Whisper, ~540 MB, baixado uma vez do Hugging Face; depois funciona sem internet e nada sai do computador).
+            <button id="ctBaixar" class="peq prim" style="margin-top:6px">Baixar o modelo de fala</button>
+          </div>
+          <div id="ctEstado" class="dica" style="color:var(--ac);margin-top:8px;user-select:text;word-break:break-word"></div>
+          <div class="rot" style="margin-top:12px">Cortes prontos</div>
+          <div id="ctProntos" class="ct-videos"></div>
+          <!-- (0.1.16) publicar um corte: YouTube (Short privado, pelo Cast) ou à mão (Instagram/Facebook pela Meta, YouTube Studio) -->
+          <div id="ctPub" hidden><div class="pn" style="margin-top:8px;padding:10px;display:grid;gap:6px">
+            <b id="ctPubNome" style="font-size:13px"></b>
+            <label class="dica">Título <input id="ctPubTitulo" maxlength="100" style="width:100%"></label>
+            <label class="dica">Legenda / descrição <textarea id="ctPubLegenda" rows="4" style="width:100%;resize:vertical"></textarea></label>
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <img id="ctCapaImg" alt="" style="width:110px;aspect-ratio:9/16;object-fit:cover;border-radius:8px;background:var(--pn2);flex:none">
+              <div style="display:grid;gap:6px;flex:1;min-width:0">
+                <label class="dica">Frase da capa <textarea id="ctCapaFrase" rows="3" maxlength="160" style="width:100%;resize:vertical"></textarea></label>
+                <label class="dica">Data <input id="ctCapaData" maxlength="40" style="width:100%"></label>
+                <button id="ctCapaRefazer" class="peq" title="Refaz a capa com a frase e a data acima (fundo: o vídeo de encerramento escolhido)">🖼 Refazer a capa</button>
+              </div>
+            </div>
+            <div class="linha" style="gap:6px;flex-wrap:wrap">
+              <button id="ctPubYt" class="peq prim" title="O Cast envia o vídeo como Short PRIVADO; a equipe confere e publica no YouTube Studio">▶ YouTube (privado)</button>
+              <button id="ctPubMeta" class="peq" title="Abre o Meta Business Suite (Reels do Instagram e do Facebook), copia a legenda e mostra o vídeo na pasta para arrastar">Instagram / Facebook…</button>
+              <button id="ctPubStudio" class="peq" title="Envio à mão pelo YouTube Studio: copia a legenda e mostra o vídeo na pasta">YouTube Studio…</button>
+              <button id="ctPubFechar" class="peq">Fechar</button>
+            </div>
+            <span class="dica">Só publique com a concordância do padre.</span>
+          </div></div>
+          <p class="dica" style="margin-top:10px">O padre precisa concordar com a publicação dos cortes. O recorte em pé mostra só o padre; a assembleia fica de fora.</p>
+          <!-- (0.1.16) homilias e cortes na nuvem, para cortar em casa -->
+          <div class="rot" style="margin-top:14px">☁ Na nuvem
+            <span style="float:right"><button id="nhAtualizar" class="peq" title="Ler de novo o que está na nuvem">↻</button> <button id="nhAbrir" class="peq" title="Abre a pasta &quot;Cast Momentos&quot; no Google Drive (no navegador)">Abrir no Drive</button></span></div>
+          <div id="nhEspaco" class="dica"></div>
+          <div style="height:8px;border-radius:4px;background:var(--bd,#444);overflow:hidden;margin:4px 0"><div id="nhBarra" style="height:100%;width:0;background:var(--ac)"></div></div>
+          <div id="nhEstado" class="dica" style="color:var(--ac)"></div>
+          <div id="nhLista" class="ct-videos"></div>
+          <details id="nhPol" style="margin-top:8px">
+            <summary class="dica" style="cursor:pointer">⚙ O que guardar na nuvem (vale para todos os computadores)</summary>
+            <div class="dica" style="display:grid;gap:6px;margin-top:6px">
+              <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="nhEnvHom" style="min-height:0;width:auto;margin-top:3px"> <span>Enviar as homilias em pé (mais leves, ~200 MB a cada 12 min) com a transcrição</span></label>
+              <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="nhEnvCor" style="min-height:0;width:auto;margin-top:3px"> <span>Enviar os cortes prontos</span></label>
+              <label>Limite do Cast na nuvem: <input type="number" id="nhLimite" min="1" max="2000" step="1" style="width:70px"> GB</label>
+              <label>Apagar homilias com mais de <input type="number" id="nhDiasHom" min="0" max="3650" style="width:60px"> dias</label>
+              <label>Apagar cortes com mais de <input type="number" id="nhDiasCor" min="0" max="3650" style="width:60px"> dias</label>
+              <span>0 = nunca apaga. Apagar = vai para a lixeira do Drive (some de vez em 30 dias). Os arquivos deste computador não são apagados.</span>
+              <div class="linha" style="gap:6px;flex-wrap:wrap">
+                <button id="nhSalvar" class="peq prim">Salvar</button>
+                <button id="nhEnviar" class="peq" title="Não espera os 2 minutos: olha a pasta e envia o que falta agora">Enviar agora</button>
+                <button id="nhLiberar" class="peq" title="Manda para a lixeira as homilias mais antigas (depois os cortes) até ficar em 80% do limite">Liberar espaço</button>
+              </div>
+            </div>
+          </details>
+        </div>
+        <div class="pn ct-meio">
+          <video id="ctVideo" controls playsinline preload="metadata"></video>
+          <div class="ct-trecho">
+            <label class="dica">Início <input id="ctIni" style="width:80px"></label>
+            <label class="dica">Fim <input id="ctFim" style="width:80px"></label>
+            <span id="ctDur" class="dica"></span>
+            <button id="ctVer" class="peq">▶ Ver o trecho</button>
+            <button id="ctGerar" class="peq prim">✂ Gerar corte com legenda</button>
+          </div>
+          <div class="ct-trecho">
+            <label class="dica">🎵 Música de fundo <select id="ctMusica" style="width:auto;max-width:220px"><option value="">— nenhuma —</option></select></label>
+            <label class="dica" title="A música fica baixinha e abaixa mais ainda sozinha quando o padre fala">volume <input type="range" id="ctVolume" min="4" max="40" step="1" value="15" style="width:90px"> <span id="ctVolumeTxt">15%</span></label>
+            <button id="ctOuvir" class="peq" title="Ouvir a música no volume escolhido">♪ Ouvir</button>
+            <button id="ctMusicasPasta" class="peq" title="Coloque aqui as músicas (MP3, M4A, WAV…). Use só músicas liberadas: por exemplo, da Biblioteca de áudio do YouTube Studio com &quot;Atribuição não obrigatória&quot;">Pasta das músicas</button>
+            <audio id="ctAudio" loop></audio>
+          </div>
+          <div class="ct-trecho">
+            <label class="dica" title="Vídeo curto antes da homilia (a música começa junto)">🎬 Abertura <select id="ctAbertura" style="width:auto;max-width:200px"><option value="">— nenhuma —</option></select></label>
+            <label class="dica" title="Vídeo curto depois da homilia">Encerramento <select id="ctEncerramento" style="width:auto;max-width:200px"><option value="">— nenhum —</option></select></label>
+            <button id="ctVinhetasPasta" class="peq" title="Coloque aqui vídeos curtos (até 15 s). Vídeo deitado entra inteiro, reduzido, sobre o próprio vídeo desfocado">Pasta das vinhetas</button>
+          </div>
+          <p class="dica">Clique numa frase para marcar o <b>início</b>; Shift+clique marca o <b>fim</b>. Dá para corrigir o texto das frases (duplo clique): a legenda usa o texto corrigido.</p>
+        </div>
+        <div class="pn ct-texto">
+          <div class="rot">Sugestões de corte</div>
+          <div id="ctCandidatos"></div>
+          <div class="rot" style="margin-top:12px">Transcrição</div>
+          <div id="ctFalas" class="ct-falas"><p class="dica">Escolha uma homilia à esquerda.</p></div>
+        </div>
+      </div>
+    </section>
     <section data-tela="ajustes" hidden>
      <div class="ajgrade">
       <nav class="pn ajnav" aria-label="Seções dos ajustes" id="ajNav">
@@ -764,6 +854,15 @@
           <button id="btnPasta" class="peq">Escolher…</button>
           <button id="btnAbrirPasta" class="peq">Abrir</button>
         </div>
+        <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:6px" title="Os momentos marcados com 🎙 no Roteiro (a Homilia vem marcada) são gravados também num arquivo à parte, na subpasta Momentos. Usa o vídeo da live: não pesa no computador."><input type="checkbox" id="ajGravarMomentos" style="margin:0;width:auto" checked> 🎙 Gravar à parte os momentos marcados no Roteiro (a Homilia, para os cortes do Instagram), na subpasta <b>Momentos</b></label>
+        <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:4px" title="Depois da Missa (com a live e a gravação desligadas), o Cast faz uma cópia em pé (1080×1920) de cada momento gravado, recortada no padre e acompanhando o rosto dele. Tudo no próprio computador. Se a live ou a gravação começar, ele para e continua depois."><input type="checkbox" id="ajFazerEmPe" style="margin:0;width:auto" checked> 📱 Depois da Missa, fazer a <b>versão em pé</b> (Reels/Stories), recortada no padre</label>
+        <div class="linha" style="align-items:center;margin-top:4px;flex-wrap:wrap">
+          <button id="btnEmPeArq" class="peq" title="Escolha qualquer vídeo gravado (ex.: a Missa baixada do YouTube Studio). Início e fim são opcionais: servem para pegar só a homilia">📱 Versão em pé de um vídeo…</button>
+          <label class="dica">trecho de <input id="emPeIni" placeholder="0:00:00" style="width:80px"></label>
+          <label class="dica">até <input id="emPeFim" placeholder="fim" style="width:80px"></label>
+          <label class="dica" title="Vídeos de fora (OBS, YouTube) às vezes vêm com a voz adiantada em relação à boca. Positivo = atrasa a voz; negativo = adianta. Os vídeos gravados pelo Cast já saem acertados pelo atraso de Ajustes › Som.">atraso do som <input id="emPeAtraso" type="number" step="50" value="0" style="width:80px"> ms</label>
+          <button id="btnMomentos" class="peq">Abrir a pasta Momentos</button><span id="ajVertical" class="dica"></span>
+        </div>
         <p class="dica" id="ajFfmpeg"></p>
       </div>
       </div>
@@ -777,6 +876,7 @@
   <script src="botoes.js"></script>
   <script src="somcena.js"></script>
   <script src="camcena.js"></script>
+  <script src="cortes.js"></script>
 <script src="cowabunga.js"></script>
 </body>
 </html>

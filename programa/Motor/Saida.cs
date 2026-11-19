@@ -32,6 +32,8 @@ namespace MiguelAngelusCast.Motor
         public string Codificador { get; set; } = "auto";
         public string CodificadorDetectado { get; set; }
         public string PastaGravacao { get; set; }
+        public bool GravarMomentos { get; set; } = true;   // (0.1.15) grava à parte os momentos marcados (a Homilia vem marcada)
+        public bool FazerEmPe { get; set; } = true;        // (0.1.15) depois da Missa, faz a versão em pé (9:16) dos momentos gravados
         public List<DestinoCfg> Destinos { get; set; } = new List<DestinoCfg>();
     }
 
@@ -111,11 +113,48 @@ namespace MiguelAngelusCast.Motor
                 else
                 {
                     if (rets.TryGetValue("gravacao", out var r)) { r.Parar(); rets.Remove("gravacao"); }
+                    if (!AoVivo && rets.TryGetValue("parte", out var rp)) { rp.Parar(); rets.Remove("parte"); ParteNome = null; relParte = null; }
                     Gravando = false; relGrav = null; Registro.Info("gravação parada");
                     PararCodificadorSeOcioso();
                 }
             }
             Mudou?.Invoke(); return null;
+        }
+
+        // (0.1.15) gravação à parte de um momento do roteiro (ex.: a homilia, para os cortes do Instagram).
+        // Reaproveita o vídeo já codificado para a live/gravação (-c copy): não pesa nada no computador.
+        // nome = null para parar. Só grava com a live ou a gravação ligadas.
+        public string ParteNome { get; private set; }
+        string arquivoParte; Stopwatch relParte;
+        public string ArquivoParte => ParteNome != null ? arquivoParte : null;
+        public bool GravarMomentos { get => Cfg.GravarMomentos; set { Cfg.GravarMomentos = value; Salvar(); Mudou?.Invoke(); } }
+        public string GravarParte(string nome)
+        {
+            lock (trava)
+            {
+                if (rets.TryGetValue("parte", out var velho))
+                {
+                    velho.Parar(); rets.Remove("parte");
+                    Registro.Info($"gravação do momento \"{ParteNome}\" parada ({relParte?.Elapsed:hh\\:mm\\:ss}): {arquivoParte}");
+                    ParteNome = null; relParte = null;
+                }
+                if (nome != null && (AoVivo || Gravando) && codRodando)
+                {
+                    var pasta = Path.Combine(Cfg.PastaGravacao, "Momentos");
+                    Directory.CreateDirectory(pasta);
+                    var limpo = string.Concat(nome.Split(Path.GetInvalidFileNameChars())).Trim();
+                    if (limpo == "") limpo = "Momento";
+                    arquivoParte = Path.Combine(pasta, $"{limpo} {DateTime.Now:yyyy-MM-dd HH}h{DateTime.Now:mm}.mp4");
+                    for (int n = 2; File.Exists(arquivoParte); n++) arquivoParte = Path.Combine(pasta, $"{limpo} {DateTime.Now:yyyy-MM-dd HH}h{DateTime.Now:mm} ({n}).mp4");
+                    var r = new Retransmissor(this, "parte", "Momento", "-c copy -bsf:a aac_adtstoasc -f mp4 -movflags +frag_keyframe+empty_moov+default_base_moof \"" + arquivoParte + "\"", false);
+                    rets["parte"] = r; r.Iniciar();
+                    ParteNome = nome; relParte = Stopwatch.StartNew();
+                    Registro.Info($"gravando o momento \"{nome}\" à parte em {arquivoParte}");
+                }
+                else if (nome == null) PararCodificadorSeOcioso();
+            }
+            Mudou?.Invoke();
+            return ParteNome != null ? null : nome == null ? null : "a live ou a gravação não está ligada";
         }
 
         public string Transmitir(bool ligar)
@@ -141,7 +180,8 @@ namespace MiguelAngelusCast.Motor
                 }
                 else
                 {
-                    foreach (var k in rets.Keys.Where(k => k != "gravacao").ToList()) { rets[k].Parar(); rets.Remove(k); }
+                    foreach (var k in rets.Keys.Where(k => k != "gravacao" && (k != "parte" || !Gravando)).ToList()) { rets[k].Parar(); rets.Remove(k); }
+                    if (!rets.ContainsKey("parte")) { ParteNome = null; relParte = null; }
                     AoVivo = false; relAr = null; Registro.Info("transmissão encerrada");
                     PararCodificadorSeOcioso();
                 }
@@ -187,7 +227,7 @@ namespace MiguelAngelusCast.Motor
             return null;
         }
 
-        static string ArgsVideo(string c, int k) => c switch
+        internal static string ArgsVideo(string c, int k) => c switch
         {
             "h264_mf" => $"-c:v h264_mf -rate_control cbr -scenario live_streaming -b:v {k}k",
             "libopenh264" => $"-c:v libopenh264 -rc_mode bitrate -b:v {k}k -allow_skip_frames 0",
@@ -318,7 +358,9 @@ namespace MiguelAngelusCast.Motor
                         kbps = rets.TryGetValue(d.Id, out var r2) ? r2.Kbps : 0,
                         quedas = rets.TryGetValue(d.Id, out var r3) ? r3.Quedas : 0
                     }),
-                    gravacao = rets.TryGetValue("gravacao", out var g) ? g.Estado : ""
+                    gravacao = rets.TryGetValue("gravacao", out var g) ? g.Estado : "",
+                    parte = ParteNome ?? "", tempoParte = relParte == null ? "" : relParte.Elapsed.ToString(@"hh\:mm\:ss"),
+                    arquivoParte = ParteNome != null ? Path.GetFileName(arquivoParte) : "", gravarMomentos = Cfg.GravarMomentos, fazerEmPe = Cfg.FazerEmPe, vertical = Vertical.Estado, ocupado = Vertical.Rodando || Cortes.Rodando, nuvemCortes = Nuvem.Homilias.Estado, nuvemRodando = Nuvem.Homilias.Rodando
                 };
             }
         }
