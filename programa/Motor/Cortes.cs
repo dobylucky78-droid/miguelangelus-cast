@@ -66,13 +66,14 @@ namespace MiguelAngelusCast.Motor
             return -16;
         }
         public static string PastaVinhetas(string pastaMomentos) => Path.Combine(pastaMomentos, "Vinhetas");
+        public static readonly HashSet<string> ExtVinhetas = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mov", ".mkv", ".webm", ".m4v" };
+        public static readonly HashSet<string> ExtMusicas = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac", ".opus" };
         public static List<string> Vinhetas(string pastaMomentos)
         {
             try
             {
                 var p = PastaVinhetas(pastaMomentos); Directory.CreateDirectory(p);
-                var ext = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mov", ".mkv", ".webm", ".m4v" };
-                return Directory.GetFiles(p).Where(f => ext.Contains(Path.GetExtension(f)) && !f.EndsWith(".parcial.mp4")).Select(Path.GetFileName).OrderBy(x => x).ToList();
+                return Directory.GetFiles(p).Where(f => ExtVinhetas.Contains(Path.GetExtension(f)) && !f.EndsWith(".parcial.mp4")).Select(Path.GetFileName).OrderBy(x => x).ToList();
             }
             catch { return new List<string>(); }
         }
@@ -95,8 +96,7 @@ namespace MiguelAngelusCast.Motor
             try
             {
                 var p = PastaMusicas(pastaMomentos); Directory.CreateDirectory(p);
-                var ext = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac", ".opus" };
-                return Directory.GetFiles(p).Where(f => ext.Contains(Path.GetExtension(f))).Select(Path.GetFileName).OrderBy(x => x).ToList();
+                return Directory.GetFiles(p).Where(f => ExtMusicas.Contains(Path.GetExtension(f))).Select(Path.GetFileName).OrderBy(x => x).ToList();
             }
             catch { return new List<string>(); }
         }

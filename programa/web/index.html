@@ -523,7 +523,7 @@
             <label class="dica">🎵 Música de fundo <select id="ctMusica" style="width:auto;max-width:220px"><option value="">— nenhuma —</option></select></label>
             <label class="dica" title="A música fica baixinha e abaixa mais ainda sozinha quando o padre fala">volume <input type="range" id="ctVolume" min="4" max="40" step="1" value="15" style="width:90px"> <span id="ctVolumeTxt">15%</span></label>
             <button id="ctOuvir" class="peq" title="Ouvir a música no volume escolhido">♪ Ouvir</button>
-            <button id="ctMusicasPasta" class="peq" title="Coloque aqui as músicas (MP3, M4A, WAV…). Use só músicas liberadas: por exemplo, da Biblioteca de áudio do YouTube Studio com &quot;Atribuição não obrigatória&quot;">Pasta das músicas</button>
+            <button id="ctMusicasPasta" class="peq" title="Coloque aqui as músicas (MP3, M4A, WAV…). Com a nuvem conectada, elas vão sozinhas para os outros computadores do Cast (e as de lá vêm para cá). Use só músicas liberadas: por exemplo, da Biblioteca de áudio do YouTube Studio com &quot;Atribuição não obrigatória&quot;">Pasta das músicas</button>
             <audio id="ctAudio" loop></audio>
           </div>
           <div class="ct-trecho">
@@ -882,6 +882,7 @@
           <button id="btnAbrirPasta" class="peq">Abrir</button>
         </div>
         <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:6px" title="Os momentos marcados com 🎙 no Roteiro (a Homilia vem marcada) são gravados também num arquivo à parte, na subpasta Momentos. Usa o vídeo da live: não pesa no computador."><input type="checkbox" id="ajGravarMomentos" style="margin:0;width:auto" checked> 🎙 Gravar à parte os momentos marcados no Roteiro (a Homilia, para os cortes do Instagram), na subpasta <b>Momentos</b></label>
+        <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:6px" title="Ao iniciar a transmissão, a gravação da Missa inteira liga sozinha; ao encerrar, ela para junto. Se a gravação já estava ligada antes da live, ela continua ligada depois."><input type="checkbox" id="ajGravarComLive" style="margin:0;width:auto"> ⏺ Gravar a Missa inteira no computador <b>junto com a transmissão</b> (começa e para sozinha com a live)</label>
         <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:4px" title="Depois da Missa (com a live e a gravação desligadas), o Cast faz uma cópia em pé (1080×1920) de cada momento gravado, recortada no padre e acompanhando o rosto dele. Tudo no próprio computador. Se a live ou a gravação começar, ele para e continua depois."><input type="checkbox" id="ajFazerEmPe" style="margin:0;width:auto" checked> 📱 Depois da Missa, fazer a <b>versão em pé</b> (Reels/Stories), recortada no padre</label>
         <div class="linha" style="align-items:center;margin-top:4px;flex-wrap:wrap">
           <button id="btnEmPeArq" class="peq" title="Escolha qualquer vídeo gravado (ex.: a Missa baixada do YouTube Studio). Início e fim são opcionais: servem para pegar só a homilia">📱 Versão em pé de um vídeo…</button>

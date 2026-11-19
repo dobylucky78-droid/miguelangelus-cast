@@ -47,8 +47,9 @@ namespace MiguelAngelusCast
 
             static readonly HttpClient longo = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
             static readonly SemaphoreSlim travaPastas = new SemaphoreSlim(1, 1);
-            static string idMom, idHom, idCor;
+            static string idMom, idHom, idCor, idMus, idVin;
             public static volatile string Estado = "";
+            public static volatile bool MateriaisNovos;      // (0.1.18) baixou música/vinheta: a aba Cortes atualiza as listas
             public static Retrato Ultimo;
             public static Politica Pol = LerPolLocal();
             public static string Email => est.Email;
@@ -113,8 +114,10 @@ namespace MiguelAngelusCast
                     var raiz = await AcharOuCriarPasta("MiguelAngelus", "root");
                     var m = await AcharOuCriarPasta("Cast Momentos", raiz);
                     idHom = await AcharOuCriarPasta("Homilias", m);
-                    idCor = await AcharOuCriarPasta("Cortes", m);
+                    idMus = await AcharOuCriarPasta("Músicas de fundo", m);   // (0.1.18) iguais em todos os computadores
+                    idVin = await AcharOuCriarPasta("Vinhetas", m);
                     idMom = m;
+                    idCor = await AcharOuCriarPasta("Cortes", m);             // por último: ele diz que as pastas estão prontas
                 }
                 finally { travaPastas.Release(); }
             }
@@ -339,6 +342,10 @@ namespace MiguelAngelusCast
                     proxLimpeza = DateTime.Now.AddHours(6);
                     if (await LimparPorIdade(r) > 0) r = await Ler();
                 }
+                // 0) (0.1.18) músicas de fundo e vinhetas: as mesmas em todos os computadores do Cast
+                bool mat = await Materiais(idMus, Cortes.PastaMusicas(pastaMomentos), Cortes.ExtMusicas, "mus", "a música", mudou, ct);
+                mat |= await Materiais(idVin, Cortes.PastaVinhetas(pastaMomentos), Cortes.ExtVinhetas, "vin", "a vinheta", mudou, ct);
+                if (mat) Estado = "☁ músicas e vinhetas em dia";
                 var naNuvemH = new HashSet<string>(r.Hom.Select(a => a.Nome), StringComparer.OrdinalIgnoreCase);
                 var naNuvemC = new HashSet<string>(r.Cor.Select(a => a.Nome), StringComparer.OrdinalIgnoreCase);
                 long uso = r.UsoApp; bool fez = false;
@@ -398,6 +405,41 @@ namespace MiguelAngelusCast
                     }
                 }
                 if (fez) { await Ler(); Estado = "☁ nuvem em dia"; }
+            }
+            // (0.1.18) sobe o que é novo aqui e baixa o que é novo lá. O que já passou por aqui e foi apagado (aqui ou
+            // na nuvem) não volta: apagar de vez é no Drive (na nuvem) e na pasta (aqui).
+            static async Task<bool> Materiais(string pid, string pasta, HashSet<string> exts, string chave, string rotulo, Action mudou, CancellationToken ct)
+            {
+                if (pid == null) return false;
+                bool fez = false;
+                Directory.CreateDirectory(pasta);
+                var nuvem = (await ListarArqs(pid)).Where(a => exts.Contains(Path.GetExtension(a.Nome)) && a.Nome.IndexOfAny(Path.GetInvalidFileNameChars()) < 0).ToList();
+                var naNuvem = new HashSet<string>(nuvem.Select(a => a.Nome), StringComparer.OrdinalIgnoreCase);
+                var locais = Directory.GetFiles(pasta).Where(f => exts.Contains(Path.GetExtension(f)) && !f.EndsWith(".baixando")).ToList();
+                var aqui = new HashSet<string>(locais.Select(Path.GetFileName), StringComparer.OrdinalIgnoreCase);
+                foreach (var f in locais)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var nome = Path.GetFileName(f); var k = chave + ":" + nome;
+                    if (naNuvem.Contains(nome)) { if (Marca(k) == null) Marcar(k, "ok"); continue; }
+                    if (Marca(k) != null) continue;                                          // apagado na nuvem: não sobe de novo
+                    if (File.GetLastWriteTime(f) > DateTime.Now.AddSeconds(-15)) continue;   // ainda sendo copiado
+                    var ext = Path.GetExtension(f).TrimStart('.').ToLowerInvariant();
+                    var tipo = chave != "mus" ? (ext == "mp4" ? "video/mp4" : "application/octet-stream") : ext == "mp3" ? "audio/mpeg" : ext == "m4a" ? "audio/mp4" : "audio/" + ext;
+                    await SubirArquivo(pid, nome, f, tipo, null, ct, p => { Estado = $"☁ enviando {rotulo} \"{Path.GetFileNameWithoutExtension(nome)}\"… {p}%"; mudou?.Invoke(); });
+                    Marcar(k, "ok"); fez = true; Registro.Info($"nuvem: enviada {rotulo} {nome}");
+                }
+                foreach (var a in nuvem)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var k = chave + ":" + a.Nome;
+                    if (aqui.Contains(a.Nome) || Marca(k) != null) continue;                // já tem, ou já teve e apagou aqui
+                    var destino = Path.Combine(pasta, a.Nome);
+                    await BaixarArquivo(a.Id, destino, a.Tamanho, ct, p => { Estado = $"☁ baixando {rotulo} \"{Path.GetFileNameWithoutExtension(a.Nome)}\"… {p}%"; mudou?.Invoke(); });
+                    File.SetLastWriteTime(destino, a.Quando);
+                    Marcar(k, "ok"); fez = true; MateriaisNovos = true; Registro.Info($"nuvem: baixada {rotulo} {a.Nome}");
+                }
+                return fez;
             }
             static string Gb(long b) => (b / 1024.0 / 1024 / 1024).ToString("0.##", CultureInfo.GetCultureInfo("pt-BR"));
 

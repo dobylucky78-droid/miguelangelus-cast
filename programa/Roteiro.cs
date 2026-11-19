@@ -267,6 +267,10 @@ namespace MiguelAngelusCast
         public void DefinirAntes(int n) { d.Antes = Math.Clamp(n, 1, 5); ultimoAlvo = -1; seqVisto = -1; Gravar(); Avisar(); }
         long seqVisto = -1; int ultimoAlvo = -1;
         public string SeguirTexto { get; private set; } = "";
+        // (0.1.18) o momento que o telão do MiguelAngelus indica agora (-1 = nenhum) e desde quando; o momento no ar e desde quando
+        public int TelaoMomento { get; private set; } = -1;
+        public DateTime TelaoDesde { get; private set; } = DateTime.MinValue;
+        public DateTime AgoraDesde { get; private set; } = DateTime.MinValue;
 
         static readonly Dictionary<string, string[]> sinonimos = new Dictionary<string, string[]>
         {
@@ -325,12 +329,17 @@ namespace MiguelAngelusCast
             seqVisto = Miguel.SeqAoVivo;
             if (a.VivoIdx < 0 || a.VivoIdx >= a.Itens.Count) { SeguirTexto = "MiguelAngelus: nada no telão" + (a.Roteiro != "" ? " · " + a.Roteiro : ""); Avisar(); return; }
             int mAtual = Mapear(a.Itens[a.VivoIdx]);
+            if (mAtual != TelaoMomento) { TelaoMomento = mAtual; TelaoDesde = DateTime.Now; }
             int alvo = -1;
-            if (mAtual >= 0 && mAtual != Agora) alvo = mAtual;                                // o telão já está num momento novo
+            // (0.1.18) só para a frente: se o momento no ar já está DEPOIS do que o telão indica (escolhido à mão, ex.:
+            // "Consagração", que não existe no MiguelAngelus; ou o telão voltou um slide), não prepara um momento que já
+            // passou. Um salto grande para trás (outra celebração começando) continua valendo.
+            bool Atras(int k) => k >= 0 && Agora >= 0 && k < Agora && Agora - k <= 3;
+            if (mAtual >= 0 && mAtual != Agora && !Atras(mAtual)) alvo = mAtual;             // o telão já está num momento novo
             else if (a.Total > 0 && a.Idx >= a.Total - d.Antes)                              // faltam poucos slides: o próximo
             {
-                int base_ = mAtual >= 0 ? mAtual : Agora;
-                for (int j = a.VivoIdx + 1; j < a.Itens.Count; j++) { var mj = Mapear(a.Itens[j]); if (mj >= 0 && mj != base_) { alvo = mj; break; } }
+                int base_ = mAtual >= 0 && !Atras(mAtual) ? mAtual : Agora;
+                for (int j = a.VivoIdx + 1; j < a.Itens.Count; j++) { var mj = Mapear(a.Itens[j]); if (mj >= 0 && mj != base_ && !Atras(mj)) { alvo = mj; break; } }
             }
             SeguirTexto = $"MiguelAngelus: {a.Texto}" + (a.Total > 0 ? $" · slide {a.Idx + 1} de {a.Total}" : "") +
                 (mAtual >= 0 ? $" → momento \"{Lista[mAtual].Nome}\"" : " (sem momento ligado)");
@@ -342,7 +351,7 @@ namespace MiguelAngelusCast
         void Ativar(int i, Escolha pronta, bool posFeita)
         {
             if (i < 0 || i >= Lista.Count) return;
-            var m = Lista[i]; Agora = i; fimVideoTratado = false; acharFeito = false; acharVisto = false; acharAtivo = false; ligarSeguirEm = DateTime.MinValue;
+            var m = Lista[i]; if (Agora != i) AgoraDesde = DateTime.Now; Agora = i; fimVideoTratado = false; acharFeito = false; acharVisto = false; acharAtivo = false; ligarSeguirEm = DateTime.MinValue;
             LimparPreparo();
             var esc = pronta ?? (m.Tipo == "video" ? null : Escolher(m));
             var cam = esc?.Cam; var tipo = esc?.Tipo ?? m.Tipo;

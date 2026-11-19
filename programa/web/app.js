@@ -410,6 +410,7 @@ function renderSaida(m) {
     || '<span class="dica">Nenhum destino ligado (Ajustes › Transmissão)</span>';
   $('#saidaInfo').textContent = (m.aoVivo || m.gravando) ? [nomeCod(m.codificador), m.kbps + ' kbps', m.perdidos ? m.perdidos + ' quadros perdidos' : '', m.gravando ? m.arquivo : '', m.parte ? `🎙 ${m.parte} à parte ${m.tempoParte}` : '', m.erro].filter(Boolean).join(' · ') : '';
   if (document.activeElement !== $('#ajGravarMomentos')) $('#ajGravarMomentos').checked = m.gravarMomentos !== false;
+  if (document.activeElement !== $('#ajGravarComLive')) $('#ajGravarComLive').checked = !!m.gravarComLive;
   if (document.activeElement !== $('#ajFazerEmPe')) $('#ajFazerEmPe').checked = m.fazerEmPe !== false;
   $('#ajVertical').textContent = m.vertical || '';
   if (!m.aoVivo && !m.gravando && m.vertical && !/^✔/.test(m.vertical)) $('#saidaInfo').textContent = '📱 ' + m.vertical;
@@ -466,6 +467,7 @@ $('#btnTestarCod').onclick = () => { $('#ajCodInfo').textContent = 'testando…'
 $('#btnPasta').onclick = () => enviar({ tipo: 'escolherPasta' });
 $('#btnAbrirPasta').onclick = () => enviar({ tipo: 'abrirPasta' });
 $('#ajGravarMomentos').onchange = e => enviar({ tipo: 'gravarMomentos', on: e.target.checked });
+$('#ajGravarComLive').onchange = e => enviar({ tipo: 'gravarComLive', on: e.target.checked });
 $('#ajFazerEmPe').onchange = e => enviar({ tipo: 'fazerEmPe', on: e.target.checked });
 $('#btnMomentos').onclick = () => enviar({ tipo: 'abrirMomentos' });
 // "1:02:30", "25:10" ou "90" → segundos; vazio = -1

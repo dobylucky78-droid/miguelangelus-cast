@@ -39,8 +39,11 @@ namespace MiguelAngelusCast.Motor
         public double LufsEntrada { get; private set; } = -120;   // curto (3 s), antes do nivelador
         public double LufsSaida => LufsEntrada <= -100 ? -120 : LufsEntrada + GanhoDb;
         public double ReducaoLimitadorDb { get; private set; }
+        // (0.1.18) blocos de 100 ms, com som, em que nem o máximo do nivelador chega ao alvo; ~1,5 min = aviso de som baixo
+        int blocosNoTeto;
+        public bool SomBaixo => Ligado && blocosNoTeto >= 900;
 
-        public void Zerar() { Array.Clear(zp); Array.Clear(zh); Array.Clear(blocos); nBlocos = iBloco = amostrasBloco = 0; somaBloco = 0; Array.Clear(atraso); env = segura = 1f; }
+        public void Zerar() { Array.Clear(zp); Array.Clear(zh); Array.Clear(blocos); nBlocos = iBloco = amostrasBloco = 0; somaBloco = 0; Array.Clear(atraso); env = segura = 1f; blocosNoTeto = 0; }
 
         static double Biquad(double x, double[] c, double[] z, int k)
         {
@@ -105,7 +108,12 @@ namespace MiguelAngelusCast.Motor
             LufsEntrada = Lufs(MediaBlocos(30));
             // só reajusta quando há som de verdade (fala, música) — nas pausas o ganho fica onde está
             if (momentaneo > PortaoLufs && LufsEntrada > PortaoLufs)
+            {
                 alvoGanhoDb = Math.Clamp(AlvoLufs - LufsEntrada, -MaxDescerDb, MaxSubirDb);
+                // (0.1.18) som baixo da mesa: o nivelador pediu mais do que pode subir; conta só os blocos com som
+                if (Ligado && AlvoLufs - LufsEntrada > MaxSubirDb + 2) { if (blocosNoTeto < 100000) blocosNoTeto++; }
+                else if (blocosNoTeto > 0) blocosNoTeto = Math.Max(0, blocosNoTeto - 3);
+            }
             // velocidade: sobe devagar (2 dB/s), desce mais rápido (6 dB/s) — a cada bloco de 100 ms
             double passo = alvoGanhoDb > ganhoDb ? 0.2 : 0.6;
             // se o momentâneo já estoura muito o alvo, desce ainda mais rápido

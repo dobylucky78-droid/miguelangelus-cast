@@ -496,6 +496,9 @@ namespace MiguelAngelusCast
                 var a = aux > 0 ? mesaSom.AvisoAux(aux) : null;
                 if (a != null) return a;
             }
+            // (0.1.18) o nivelador no máximo por mais de 1,5 min de som: a mesa manda baixo demais
+            if (som.Cfg.Nivelar && som.Nivel2.SomBaixo)
+                return $"o som está chegando baixo da mesa (o nivelador está no máximo, +{som.Nivel2.MaxSubirDb:0} dB): suba o volume da saída (Aux) que vai para este computador";
             return null;
         }
         string NomeSom()
@@ -613,6 +616,12 @@ namespace MiguelAngelusCast
             int i = roteiro.Agora;
             var m = i >= 0 && i < roteiro.Lista.Count ? roteiro.Lista[i] : null;
             bool quer = m != null && m.GravaAParte && saida.GravarMomentos && (saida.AoVivo || saida.Gravando);
+            // (0.1.18) seguindo o MiguelAngelus: o telão já está em outro momento há 45 s (ex.: Creio) e ninguém apertou
+            // Transição → a homilia acabou; o arquivo à parte fecha (não grava o resto da Missa nele)
+            bool telaoSaiu = quer && roteiro.Seguir && roteiro.TelaoMomento >= 0 && roteiro.TelaoMomento != i && (DateTime.Now - roteiro.TelaoDesde).TotalSeconds > 45;
+            if (telaoSaiu && parteMomento == i && saida.ParteNome != null && pararParteEm == DateTime.MaxValue)
+                roteiro.AvisoExtra($"🎙 O telão já passou de \"{m.Nome}\": o arquivo à parte foi fechado. Aperte Transição para o próximo momento.");
+            if (telaoSaiu) quer = false;
             if (quer)
             {
                 pararParteEm = DateTime.MaxValue;
@@ -620,8 +629,11 @@ namespace MiguelAngelusCast
                 {
                     if (parteMomento == i && saida.ParteNome == null && DateTime.Now < tentouParte.AddSeconds(10)) return;   // não insiste a cada tique
                     parteMomento = i; tentouParte = DateTime.Now;
-                    var e = saida.GravarParte(m.Nome);
-                    roteiro.AvisoExtra(e == null ? $"🎙 Gravando \"{m.Nome}\" à parte (Momentos, na pasta de gravações)." : $"🎙 Não deu para gravar \"{m.Nome}\" à parte: {e}.");
+                    // (0.1.18) a live/gravação começou com o momento já no ar há mais de 1 min: o arquivo diz que começou no meio
+                    bool noMeio = (DateTime.Now - roteiro.AgoraDesde).TotalSeconds > 60;
+                    var nomeArq = noMeio ? m.Nome + " (começou no meio)" : m.Nome;
+                    var e = saida.GravarParte(nomeArq);
+                    roteiro.AvisoExtra(e == null ? $"🎙 Gravando \"{m.Nome}\" à parte (Momentos, na pasta de gravações)" + (noMeio ? " — começou no meio: o começo ficou de fora." : ".") : $"🎙 Não deu para gravar \"{m.Nome}\" à parte: {e}.");
                 }
             }
             else if (saida.ParteNome != null)
@@ -661,7 +673,7 @@ namespace MiguelAngelusCast
             if (Nuvem.Conectado && DateTime.Now >= proxNuvemHom && (Nuvem.Homilias.Pol.EnviarHomilias || Nuvem.Homilias.Pol.EnviarCortes))
             {
                 proxNuvemHom = DateTime.Now.AddMinutes(2);
-                Nuvem.Homilias.Trabalhar(PastaMomentos, CodPosMissa(), f => saida.Cfg.FazerEmPe && Cortes.Aguardando(f), () => Na(() => { Enviar(saida.Estado()); EnviarNuvemHomilias(); }));
+                Nuvem.Homilias.Trabalhar(PastaMomentos, CodPosMissa(), f => saida.Cfg.FazerEmPe && Cortes.Aguardando(f), () => Na(() => { Enviar(saida.Estado()); EnviarNuvemHomilias(); if (Nuvem.Homilias.MateriaisNovos) { Nuvem.Homilias.MateriaisNovos = false; EnviarCortesLista(); } }));
             }
         }
         DateTime proxNuvemHom;
@@ -1372,6 +1384,7 @@ namespace MiguelAngelusCast
                         if (fb.ShowDialog(this) == DialogResult.OK) { saida.Cfg.PastaGravacao = fb.SelectedPath; saida.Salvar(); EnviarSaidaCfg(); }
                     break;
                 case "gravarMomentos": saida.GravarMomentos = Sim("on"); break;
+                case "gravarComLive": saida.GravarComLive = Sim("on"); break;
                 case "fazerEmPe": saida.Cfg.FazerEmPe = Sim("on"); saida.Salvar(); if (!saida.Cfg.FazerEmPe) Vertical.Parar(); Enviar(saida.Estado()); break;
                 // (0.1.15) versão em pé de qualquer vídeo gravado (ex.: a Missa baixada do YouTube Studio), com trecho opcional
                 case "emPeArquivo":
