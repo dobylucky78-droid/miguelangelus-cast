@@ -655,7 +655,10 @@
           </div>
           <div class="capaprev">
             <div class="linha"><span class="dica" style="flex:1">Prévia · 1920 × 1080</span><span id="cpModos" class="linha"><button data-modo="capa">Capa</button><button data-modo="espera">Tela de espera</button><button data-modo="fim">Encerramento</button></span></div>
-            <div class="capabox"><img id="cpImg" alt="Prévia da capa"></div>
+            <div class="capabox" id="cpBox"><img id="cpImg" alt="Prévia da capa"></div>
+            <div class="linha" style="align-items:center;margin-top:6px"><span class="dica" style="flex:1" id="cpAjInfo">Arraste o título, os textos, a imagem ou as marcas na prévia; o quadradinho do canto muda o tamanho. Fica guardado na capa da paróquia, para esta disposição.</span>
+              <label class="dica" style="display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" id="cpAjVer" checked> mostrar as caixas</label>
+              <button class="peq" id="cpAjVoltar" title="Desfaz o que foi arrastado e volta à disposição escolhida">↺ Voltar à disposição</button></div>
             <div id="cpSugs" class="pn" hidden>
               <div class="linha" style="align-items:center"><b style="flex:1">Sugestões para a sua paróquia</b><button class="peq" id="cpSugOutras">🎲 Outras</button><button class="peq" id="cpSugFechar">Fechar</button></div>
               <p class="dica" style="margin:4px 0 8px">Clique numa para usar. Os textos, a data e as imagens continuam os seus; muda só o jeito.</p>
@@ -882,7 +885,17 @@
           <button id="btnAbrirPasta" class="peq">Abrir</button>
         </div>
         <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:6px" title="Os momentos marcados com 🎙 no Roteiro (a Homilia vem marcada) são gravados também num arquivo à parte, na subpasta Momentos. Usa o vídeo da live: não pesa no computador."><input type="checkbox" id="ajGravarMomentos" style="margin:0;width:auto" checked> 🎙 Gravar à parte os momentos marcados no Roteiro (a Homilia, para os cortes do Instagram), na subpasta <b>Momentos</b></label>
-        <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:6px" title="Ao iniciar a transmissão, a gravação da Missa inteira liga sozinha; ao encerrar, ela para junto. Se a gravação já estava ligada antes da live, ela continua ligada depois."><input type="checkbox" id="ajGravarComLive" style="margin:0;width:auto"> ⏺ Gravar a Missa inteira no computador <b>junto com a transmissão</b> (começa e para sozinha com a live)</label>
+        <div class="linha" style="align-items:center;margin-top:6px;flex-wrap:wrap;gap:6px">
+          <label class="dica" for="ajGravarAuto" title="A gravação da Missa inteira no computador pode ligar sozinha. Só uma das formas vale. Nunca liga a transmissão. Pela câmera ou pelo horário, só perto do horário da celebração (o da capa: da agenda do MiguelAngelus ou o posto na capa) e uma vez por celebração: se você parar, não liga de novo. Para junto com a live; sem live, para quando o Encerramento fica 1 min no ar (ou 3 h depois do horário).">⏺ Gravar a Missa inteira no computador sozinho:</label>
+          <select id="ajGravarAuto" style="width:auto">
+            <option value="">não (só no botão ● Gravar)</option>
+            <option value="live">junto com a transmissão (começa e para com a live)</option>
+            <option value="camera">quando a primeira câmera entrar no Programa</option>
+            <option value="horario">no horário da celebração</option>
+          </select>
+          <label class="dica" id="ajGravarAntesL" hidden><input id="ajGravarAntes" type="number" min="0" max="60" step="1" style="width:60px"> min antes</label>
+        </div>
+        <div class="dica" id="ajGravarAutoInfo" style="margin-top:2px"></div>
         <label class="dica" style="display:flex;align-items:center;gap:6px;margin-top:4px" title="Depois da Missa (com a live e a gravação desligadas), o Cast faz uma cópia em pé (1080×1920) de cada momento gravado, recortada no padre e acompanhando o rosto dele. Tudo no próprio computador. Se a live ou a gravação começar, ele para e continua depois."><input type="checkbox" id="ajFazerEmPe" style="margin:0;width:auto" checked> 📱 Depois da Missa, fazer a <b>versão em pé</b> (Reels/Stories), recortada no padre</label>
         <div class="linha" style="align-items:center;margin-top:4px;flex-wrap:wrap">
           <button id="btnEmPeArq" class="peq" title="Escolha qualquer vídeo gravado (ex.: a Missa baixada do YouTube Studio). Início e fim são opcionais: servem para pegar só a homilia">📱 Versão em pé de um vídeo…</button>

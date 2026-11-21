@@ -141,7 +141,7 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .tv{color:#a678e0!important;border-color:#a678e0!important}
 .rotgrade{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
 @media (max-width:1100px){.rotgrade{grid-template-columns:1fr}}
-.rohead,.rolinha{display:grid;grid-template-columns:28px minmax(140px,1.2fr) 92px minmax(140px,1fr) minmax(200px,1.3fr) 96px;gap:6px;align-items:center}
+.rohead,.rolinha{display:grid;grid-template-columns:40px minmax(140px,1.2fr) 92px minmax(140px,1fr) minmax(200px,1.3fr) 96px;gap:6px;align-items:center}
 .rohead{font-size:11px;color:var(--su);text-transform:uppercase;letter-spacing:.05em;padding:0 4px 4px}
 .rolinha{padding:4px;border-radius:9px;border:1px solid transparent}
 .rolinha:hover{border-color:var(--bd)}
@@ -149,6 +149,11 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .rolinha.video{border:1px dashed #a678e0}
 .rolinha input,.rolinha select{min-height:32px;padding:3px 6px;width:100%;font-size:13px}
 .rolinha .n{color:var(--su);font-size:12px;text-align:right}
+/* (0.1.19) nº editável do momento e o pisca do momento que andou */
+.rolinha .n-ed{width:100%;min-height:28px;padding:2px 3px;text-align:center;font-size:12.5px;font-weight:600;color:var(--tx);background:var(--pn2);border:1px solid var(--bd);border-radius:7px;-moz-appearance:textfield}
+.rolinha .n-ed::-webkit-inner-spin-button,.rolinha .n-ed::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.rolinha .n-ed:focus{border-color:var(--ac);outline:none}
+.rolinha.mexido{border-color:var(--ac);background:var(--acx);transition:background .3s}
 .rolinha .tpb{min-height:28px;padding:1px 8px;font-size:12px;border-radius:12px;background:none}
 .rolinha .acoes{display:flex;gap:2px}
 .rolinha .acoes button{min-height:28px;padding:0 7px;font-size:12px}
@@ -166,6 +171,13 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .capaprev{display:flex;flex-direction:column;gap:10px;min-width:0}
 .capabox{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;box-shadow:0 14px 36px rgba(0,0,0,.35);background:#0b0f18}
 .capabox img{width:100%;height:100%;display:block}
+/* (0.1.19, backlog 8.7) caixas para arrastar e mudar o tamanho dos itens da capa */
+.cpaj{position:absolute;border:1px dashed rgba(255,255,255,.55);box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:move;touch-action:none;border-radius:4px}
+.cpaj:hover,.cpaj.ativo{border:2px solid #ffd166;background:rgba(255,209,102,.08)}
+.cpaj>span{position:absolute;left:0;top:-18px;font-size:11px;background:rgba(0,0,0,.65);color:#fff;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;opacity:0}
+.cpaj:hover>span,.cpaj.ativo>span{opacity:1}
+.cpaj>i{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#ffd166;border:1px solid #000;border-radius:2px;cursor:nwse-resize}
+.capabox.semaj .cpaj{display:none}
 .sw{width:30px;height:30px;border-radius:50%;padding:0!important;min-height:0!important;border:2px solid transparent!important}
 .sw.ligado{border-color:#fff!important;box-shadow:0 0 0 2px var(--ac)}
 .cpmarca{display:flex;align-items:center;gap:8px;margin-top:6px}

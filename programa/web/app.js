@@ -112,7 +112,7 @@ if (NO_APP) {
     }
     else if (m.tipo === 'atualizacaoMsg') { $('#atuMsg').textContent = m.msg; $('#atuMsg').style.color = m.erro ? 'var(--erro, #e66)' : ''; if (m.erro) $('#atuInstalar').disabled = false; }
     else if (m.tipo === 'inicioCk') renderInicioCk(m);
-    else if (m.tipo === 'capaImg') { if (m.modo === 'mini') $('#inCapa').src = 'data:image/jpeg;base64,' + m.img; else if (m.modo === CP.modo) $('#cpImg').src = 'data:image/jpeg;base64,' + m.img; }
+    else if (m.tipo === 'capaImg') { if (m.modo === 'mini') $('#inCapa').src = 'data:image/jpeg;base64,' + m.img; else if (m.modo === CP.modo) { $('#cpImg').src = 'data:image/jpeg;base64,' + m.img; CP.caixas = m.caixas || {}; renderCaixas(); } }
     else if (m.tipo === 'rotVideoEscolhido') videoEscolhido(m);
     else if (m.tipo === 'somCfg') renderSomCfg(m);
     else if (m.tipo === 'saidaCfg') renderAjSaida(m);
@@ -410,7 +410,17 @@ function renderSaida(m) {
     || '<span class="dica">Nenhum destino ligado (Ajustes › Transmissão)</span>';
   $('#saidaInfo').textContent = (m.aoVivo || m.gravando) ? [nomeCod(m.codificador), m.kbps + ' kbps', m.perdidos ? m.perdidos + ' quadros perdidos' : '', m.gravando ? m.arquivo : '', m.parte ? `🎙 ${m.parte} à parte ${m.tempoParte}` : '', m.erro].filter(Boolean).join(' · ') : '';
   if (document.activeElement !== $('#ajGravarMomentos')) $('#ajGravarMomentos').checked = m.gravarMomentos !== false;
-  if (document.activeElement !== $('#ajGravarComLive')) $('#ajGravarComLive').checked = !!m.gravarComLive;
+  // (0.1.19) gravação automática: nunca / com a live / 1ª câmera / horário
+  const modoGA = m.gravarAuto != null ? m.gravarAuto : (m.gravarComLive ? 'live' : '');
+  if (document.activeElement !== $('#ajGravarAuto')) $('#ajGravarAuto').value = modoGA;
+  if (document.activeElement !== $('#ajGravarAntes')) $('#ajGravarAntes').value = m.gravarAntes ?? 5;
+  $('#ajGravarAntesL').hidden = modoGA !== 'horario';
+  $('#ajGravarAutoInfo').textContent = {
+    live: 'Liga quando você inicia a transmissão e para quando ela termina.',
+    camera: 'Liga quando uma câmera vai para o Programa, de 15 min antes até 1h30 depois do horário da celebração (o da capa). Para com a live ou com o Encerramento 1 min no ar.',
+    horario: `Liga ${m.gravarAntes ?? 5} min antes do horário da celebração (o da capa), mesmo sem live. Para com a live ou com o Encerramento 1 min no ar (no máximo 3 h depois).`,
+  }[modoGA] || '';
+  if (m.gravandoSozinho) $('#ajGravarAutoInfo').textContent = '⏺ Gravando agora porque ligou sozinha. ' + $('#ajGravarAutoInfo').textContent;
   if (document.activeElement !== $('#ajFazerEmPe')) $('#ajFazerEmPe').checked = m.fazerEmPe !== false;
   $('#ajVertical').textContent = m.vertical || '';
   if (!m.aoVivo && !m.gravando && m.vertical && !/^✔/.test(m.vertical)) $('#saidaInfo').textContent = '📱 ' + m.vertical;
@@ -467,7 +477,8 @@ $('#btnTestarCod').onclick = () => { $('#ajCodInfo').textContent = 'testando…'
 $('#btnPasta').onclick = () => enviar({ tipo: 'escolherPasta' });
 $('#btnAbrirPasta').onclick = () => enviar({ tipo: 'abrirPasta' });
 $('#ajGravarMomentos').onchange = e => enviar({ tipo: 'gravarMomentos', on: e.target.checked });
-$('#ajGravarComLive').onchange = e => enviar({ tipo: 'gravarComLive', on: e.target.checked });
+$('#ajGravarAuto').onchange = e => enviar({ tipo: 'gravarAuto', modo: e.target.value });
+$('#ajGravarAntes').onchange = e => { const v = Math.max(0, Math.min(60, Math.round(+e.target.value || 0))); enviar({ tipo: 'gravarAuto', antes: v }); };
 $('#ajFazerEmPe').onchange = e => enviar({ tipo: 'fazerEmPe', on: e.target.checked });
 $('#btnMomentos').onclick = () => enviar({ tipo: 'abrirMomentos' });
 // "1:02:30", "25:10" ou "90" → segundos; vazio = -1
@@ -763,11 +774,13 @@ function opcoesPessoa(sel, tipo) {
 }
 const selPessoa = (o, tipo) => tipo === 'seguir' || tipo === 'achar'
   ? `<select data-c="Pessoa" title="${tipo === 'achar' ? 'Quem procurar na posição (vazio = centraliza o maior rosto)' : 'Quem seguir (vazio = o rosto em uso na aba Câmera que segue)'}">${opcoesPessoa(o.Pessoa, tipo)}</select>` : '';
+// (0.1.19) nº do momento editável: digitar a posição leva o momento para lá (os de depois descem uma posição)
+const numMomento = i => `<input class="n n-ed" data-a-n type="number" min="1" max="${RO.lista.length}" value="${i + 1}" title="Posição deste momento: digite outro número e tecle Enter para levá-lo para lá (os seguintes descem uma posição)">`;
 function renderRoLista() {
   $('#roLista').innerHTML = RO.lista.map((m, i) => {
     const acoes = `<span class="acoes"><button data-a="sobe" title="Subir">▲</button><button data-a="desce" title="Descer">▼</button><button data-a="tira" title="Tirar do roteiro">✕</button></span>`;
     if (m.Tipo === 'video') return `<div class="rolinha video ${i === RO.agora ? 'agora' : ''}" data-i="${i}">
-      <span class="n">${i + 1}</span><input data-c="Nome" value="${esc(m.Nome)}"><span class="tp t-video" style="justify-self:start">vídeo</span>
+      ${numMomento(i)}<input data-c="Nome" value="${esc(m.Nome)}"><span class="tp t-video" style="justify-self:start">vídeo</span>
       <span class="campos"><button class="peq" data-a="arquivo" title="${esc(m.Video)}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🎬 ${esc(arquivoDe(m.Video) || 'escolher arquivo…')}</button></span>
       <span class="campos"><button class="peq" data-a="segue" style="flex:1">${m.Segue ? 'Ao acabar: segue sozinho' : 'Ao acabar: espera'}</button></span>${acoes}</div>`;
     const comCam = m.Tipo !== 'sem';
@@ -784,7 +797,7 @@ function renderRoLista() {
     const extra = `<div class="ro-extra" data-i="${i}">${comCam ? `<button class="peq" data-a="outra" title="Outra cena (outra câmera) para este momento: o Cast escolhe a que não está no ar">+ outra câmera</button>` : ''}${btnGrava}
       ${RO.seguir ? `<label class="dica">No MiguelAngelus: <input data-c="Miguel" value="${esc(m.Miguel || '')}" placeholder="automático (pelo nome)" title="Como este momento aparece no roteiro do MiguelAngelus, separado por vírgulas (ex.: Glória, Hino de louvor). Vazio = pelo nome do momento."></label>` : ''}</div>`;
     return `<div class="romomento ${i === RO.preparado ? 'prep' : ''}"><div class="rolinha ${i === RO.agora ? 'agora' : ''}" data-i="${i}">
-      <span class="n">${i + 1}</span><input data-c="Nome" value="${esc(m.Nome)}">
+      ${numMomento(i)}<input data-c="Nome" value="${esc(m.Nome)}">
       <button class="tpb tp t-${m.Tipo}" data-a="tipo" title="Clique para trocar o tipo">${NOME_TIPO[m.Tipo]}</button>
       <select data-c="Cena">${opcoesCenas(m.Cena)}</select>
       <span class="campos">${comCam ? `<select data-c="Camera">${opcoesCam(m.Camera)}</select><select data-c="Posicao">${opcoesPos(m.Camera, m.Posicao)}</select>${selPessoa(m, m.Tipo)}` : '<span class="dica">—</span>'}</span>${acoes}</div>${outras}${extra}</div>`;
@@ -795,8 +808,8 @@ $('#roLista').addEventListener('click', e => {
   const b = e.target.closest('[data-a]'), row = e.target.closest('[data-i]'); if (!b || !row) return;
   const i = +row.dataset.i, a = b.dataset.a;
   if (a === 'tipo') roMexe(l => { l[i].Tipo = TIPOS[(TIPOS.indexOf(l[i].Tipo) + 1) % TIPOS.length]; });
-  else if (a === 'sobe' && i > 0) roMexe(l => { [l[i - 1], l[i]] = [l[i], l[i - 1]]; });
-  else if (a === 'desce' && i < RO.lista.length - 1) roMexe(l => { [l[i + 1], l[i]] = [l[i], l[i + 1]]; });
+  else if (a === 'sobe' && i > 0) moverMomento(i, i - 1, b);
+  else if (a === 'desce' && i < RO.lista.length - 1) moverMomento(i, i + 1, b);
   else if (a === 'tira' && confirm(`Tirar "${RO.lista[i].Nome}" do roteiro?`)) roMexe(l => l.splice(i, 1));
   else if (a === 'segue') roMexe(l => { l[i].Segue = !l[i].Segue; });
   else if (a === 'gravaParte') roMexe(l => { const g = l[i].GravarParte; l[i].GravarParte = g == null ? true : g === true ? false : null; delete l[i].GravaAParte; });
@@ -817,7 +830,49 @@ $('#roLista').addEventListener('click', e => {
     Object.assign(m, ops[0]); m.Outras = ops.slice(1);
   });
 });
+// (0.1.19) Leva o momento de i para j (os do meio andam uma posição). Com as setinhas, a tela rola junto: a setinha
+// do momento que andou fica embaixo do mouse, e o clique repetido continua mexendo o MESMO momento. Ele pisca dourado.
+const linhaDoMomento = j => $(`#roLista .rolinha[data-i="${j}"]:not(.ro-ou)`);
+function rolador(el) {
+  for (let p = el?.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement;
+}
+function moverMomento(i, j, botao) {
+  j = Math.max(0, Math.min(RO.lista.length - 1, j));
+  if (i === j) return renderRoLista();
+  const antes = botao ? botao.getBoundingClientRect().top : null;
+  roMexe(l => { const [m] = l.splice(i, 1); l.splice(j, 0, m); });
+  const linha = linhaDoMomento(j);
+  if (!linha) return;
+  if (botao) {
+    const nb = linha.querySelector(`[data-a="${botao.dataset.a}"]`);
+    if (nb && antes != null) {
+      rolador(linha).scrollBy(0, nb.getBoundingClientRect().top - antes);
+      // no topo (ou no fim) da página não há para onde rolar: abre um espaço acima (ou abaixo) da lista, para a setinha
+      // continuar embaixo do mouse; o espaço some quando o mouse sai da lista
+      const falta = nb.getBoundingClientRect().top - antes;
+      if (falta < -1) { const e = espacoRoteiro('roEspacoCima', 'beforebegin'); e.style.height = (e.offsetHeight - falta) + 'px'; }
+      else if (falta > 1) { const e = espacoRoteiro('roEspacoBaixo', 'afterend'); e.style.height = (e.offsetHeight + falta) + 'px'; rolador(linha).scrollBy(0, falta); }
+    }
+  } else linha.scrollIntoView({ block: 'center' });
+  linha.classList.add('mexido');
+  setTimeout(() => linha.classList.remove('mexido'), 1200);
+}
+function espacoRoteiro(id, onde) {
+  let e = document.getElementById(id);
+  if (!e) { e = document.createElement('div'); e.id = id; e.className = 'ro-espaco'; e.style.height = '0px'; $('#roLista').insertAdjacentElement(onde, e); }
+  return e;
+}
+$('#roLista').addEventListener('mouseleave', () => { for (const id of ['roEspacoCima', 'roEspacoBaixo']) document.getElementById(id)?.remove(); });
+$('#roLista').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-a-n]')) { e.preventDefault(); e.target.blur(); } });
 $('#roLista').addEventListener('change', e => {
+  if (e.target.matches('[data-a-n]')) {
+    const row = e.target.closest('[data-i]'), i = +row.dataset.i, n = parseInt(e.target.value, 10);
+    return Number.isFinite(n) ? moverMomento(i, n - 1) : renderRoLista();
+  }
   const c = e.target.dataset.c, row = e.target.closest('[data-i]'); if (!c || !row) return;
   const i = +row.dataset.i, v = e.target.value, o = row.dataset.o;
   roMexe(l => {
@@ -826,7 +881,12 @@ $('#roLista').addEventListener('change', e => {
     if (c === 'Camera') alvo.Posicao = -1;
   });
 });
-$('#roMais').onclick = () => roMexe(l => l.push({ Nome: 'Momento', Tipo: 'fixo', Cena: '', Camera: '', Posicao: -1, Video: '', Segue: true }));
+$('#roMais').onclick = () => {
+  roMexe(l => l.push({ Nome: 'Momento', Tipo: 'fixo', Cena: '', Camera: '', Posicao: -1, Video: '', Segue: true }));
+  // (0.1.19) o novo entra no fim com o número já selecionado: é só digitar a posição e Enter
+  const linha = linhaDoMomento(RO.lista.length - 1), n = linha?.querySelector('[data-a-n]');
+  if (n) { linha.scrollIntoView({ block: 'center' }); n.focus(); n.select(); linha.classList.add('mexido'); setTimeout(() => linha.classList.remove('mexido'), 1500); }
+};
 $('#roVideoIni').onclick = () => enviar({ tipo: 'rotVideo', i: -1, noFim: false });
 $('#roVideoFim').onclick = () => enviar({ tipo: 'rotVideo', i: -1, noFim: true });
 function videoEscolhido(m) {
@@ -963,6 +1023,8 @@ function renderCapa(m) {
   $('#cpCenas').textContent = m.cenas ? 'Cenas já estão no Ao vivo' : 'Criar as cenas no Ao vivo';
   $('#cpCenas').disabled = !!m.cenas;
   if (m.msg) { $('#cpMsg').textContent = m.msg; clearTimeout(CP.tMsg); CP.tMsg = setTimeout(() => $('#cpMsg').textContent = '', 10000); }
+  const aj = c.Ajustes?.[c.Modelo || 'arco'];
+  $('#cpAjVoltar').disabled = !aj || !Object.keys(aj).length;
 }
 function capaMudar(f) { if (!CP.cfg) return; f(CP.cfg); enviar({ tipo: 'capaMudar', cfg: CP.cfg, modo: CP.modo }); }
 for (const [id, k] of Object.entries(CP_CAMPOS)) $('#' + id).addEventListener('input', e => { clearTimeout(CP.tDig); CP.tDig = setTimeout(() => capaMudar(c => c[k] = e.target.value), 350); });
@@ -1016,6 +1078,56 @@ $('#cpEscolherImg').onclick = () => enviar({ tipo: 'capaImagem', qual: CP.cfg?.I
 $$('[data-escolher]').forEach(b => b.onclick = () => enviar({ tipo: 'capaImagem', qual: b.dataset.escolher, modo: CP.modo }));
 $$('[data-marca]').forEach(b => b.onclick = () => capaMudar(c => { if (b.dataset.marca === 'marca1') c.UsarMarca1 = !c.UsarMarca1; else c.UsarMarca2 = !c.UsarMarca2; }));
 $('#cpModos').addEventListener('click', e => { const b = e.target.closest('[data-modo]'); if (b) { CP.modo = b.dataset.modo; enviar({ tipo: 'capaPedir', modo: CP.modo }); } });
+// (0.1.19, backlog 8.7) arrastar e mudar o tamanho do título, dos textos, da imagem e das marcas direto na prévia.
+// Fica em Ajustes[modelo][item] = [dx, dy, escala] (dx/dy em fração da tela); a disposição escolhida é o ponto de partida.
+const CP_AJ_NOMES = { titulo: 'Título', textos: 'Textos', imagem: 'Imagem', marcas: 'Brasão e logo' };
+const ajModelo = () => CP.cfg?.Modelo || 'arco';
+function ajDe(item) { const a = CP.cfg?.Ajustes?.[ajModelo()]?.[item]; return Array.isArray(a) && a.length >= 3 ? a.slice(0, 3).map(Number) : [0, 0, 1]; }
+function renderCaixas() {
+  const box = $('#cpBox'); box.querySelectorAll('.cpaj').forEach(e => e.remove());
+  const cx = CP.caixas || {};
+  for (const k of ['imagem', 'textos', 'titulo', 'marcas']) {   // a imagem atrás; título e marcas na frente dos textos
+    const r = cx[k]; if (!r) continue;
+    const d = document.createElement('div'); d.className = 'cpaj'; d.dataset.aj = k; d.title = CP_AJ_NOMES[k] + ': arraste para mover; o quadradinho muda o tamanho';
+    Object.assign(d.style, { left: r[0] * 100 + '%', top: r[1] * 100 + '%', width: r[2] * 100 + '%', height: r[3] * 100 + '%' });
+    d.innerHTML = `<span>${CP_AJ_NOMES[k]}</span><i></i>`; box.appendChild(d);
+  }
+  const aj = CP.cfg?.Ajustes?.[ajModelo()];
+  $('#cpAjVoltar').disabled = !aj || !Object.keys(aj).length;
+  box.classList.toggle('semaj', !$('#cpAjVer').checked);
+}
+$('#cpAjVer').onchange = renderCaixas;
+$('#cpAjVoltar').onclick = () => capaMudar(c => { if (c.Ajustes) delete c.Ajustes[c.Modelo || 'arco']; });
+$('#cpBox').addEventListener('pointerdown', e => {
+  const d = e.target.closest('.cpaj'); if (!d || !CP.cfg || !CP.caixas?.[d.dataset.aj]) return;
+  e.preventDefault();
+  const k = d.dataset.aj, tam = e.target.tagName === 'I', B = $('#cpBox').getBoundingClientRect();
+  const r0 = CP.caixas[k].slice(), a0 = ajDe(k);
+  // o título e as marcas junto do texto ficam dentro do bloco de textos: o deslocamento deles vai na escala do bloco
+  const dentro = k === 'titulo' || (k === 'marcas' && (CP.cfg.MarcasPos || 'texto') === 'texto');
+  const sb = dentro ? ajDe('textos')[2] || 1 : 1;
+  const lim = (v, a, b) => Math.max(a, Math.min(b, v));
+  let a = a0.slice();
+  d.setPointerCapture(e.pointerId); d.classList.add('ativo');
+  const mover = ev => {
+    const fx = (ev.clientX - e.clientX) / B.width, fy = (ev.clientY - e.clientY) / B.height;
+    if (tam) {
+      const f = lim((r0[2] + fx) / r0[2], .3 / a0[2], 3 / a0[2]);
+      a = [a0[0], a0[1], +(a0[2] * f).toFixed(3)];
+      d.style.width = r0[2] * f * 100 + '%'; d.style.height = r0[3] * f * 100 + '%';
+    } else {
+      a = [+lim(a0[0] + fx / sb, -1, 1).toFixed(4), +lim(a0[1] + fy / sb, -1, 1).toFixed(4), a0[2]];
+      d.style.left = (r0[0] + fx) * 100 + '%'; d.style.top = (r0[1] + fy) * 100 + '%';
+    }
+  };
+  const soltar = () => {
+    d.removeEventListener('pointermove', mover); d.removeEventListener('pointerup', soltar); d.removeEventListener('pointercancel', soltar);
+    d.classList.remove('ativo');
+    if (a.join() === a0.join()) return;
+    capaMudar(c => { const m = c.Modelo || 'arco'; c.Ajustes = c.Ajustes || {}; c.Ajustes[m] = c.Ajustes[m] || {}; c.Ajustes[m][k] = a; });
+  };
+  d.addEventListener('pointermove', mover); d.addEventListener('pointerup', soltar); d.addEventListener('pointercancel', soltar);
+});
 $('#cpExportar').onclick = () => enviar({ tipo: 'capaExportar', modo: CP.modo });
 $('#cpCenas').onclick = () => enviar({ tipo: 'capaCenas', modo: CP.modo });
 

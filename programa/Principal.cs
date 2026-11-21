@@ -102,7 +102,7 @@ namespace MiguelAngelusCast
                 relogio.Start();
                 roteiro = new Roteiro(mesa, PrepararRastreio, () => rastreio);
                 roteiro.Mudou += () => { if (rotPendente) return; rotPendente = true; Na(() => { rotPendente = false; EnviarRoteiro(null); }); };
-                relogioRastreio.Tick += (s, e) => { EnviarRastreio(false); try { roteiro.Tick(); EsperaAutomatica(); GravacaoDoMomento(); } catch (Exception ex) { Registro.Erro("roteiro", ex); } };
+                relogioRastreio.Tick += (s, e) => { EnviarRastreio(false); try { roteiro.Tick(); EsperaAutomatica(); GravacaoAutomatica(); GravacaoDoMomento(); } catch (Exception ex) { Registro.Erro("roteiro", ex); } };
                 relogioRastreio.Start();
                 // (0.1.5) botões (Stream Deck / Stream Dock): porta só deste computador
                 Controle.NaTelaFn = f => { var tcs = new System.Threading.Tasks.TaskCompletionSource<object>(); Na(() => { try { tcs.TrySetResult(f()); } catch (Exception ex) { Registro.Erro("botão", ex); tcs.TrySetResult("!erro"); } }); return tcs.Task; };
@@ -601,9 +601,11 @@ namespace MiguelAngelusCast
             Enviar(info);
             System.Threading.Tasks.Task.Run(() =>
             {
-                string img = null; try { img = Capa.JpegBase64(modo, c); } catch (Exception e) { Registro.Erro("prévia da capa", e); }
+                string img = null; System.Collections.Generic.Dictionary<string, double[]> caixas = null;
+                try { img = Capa.JpegBase64(modo, c, out caixas); } catch (Exception e) { Registro.Erro("prévia da capa", e); }
                 if (n != capaPedido || img == null) return;
-                try { BeginInvoke(new Action(() => { if (n == capaPedido) Enviar(new { tipo = "capaImg", modo, img }); })); } catch { }
+                // (0.1.19) caixas: onde ficou cada item, para arrastar e mudar o tamanho na prévia
+                try { BeginInvoke(new Action(() => { if (n == capaPedido) Enviar(new { tipo = "capaImg", modo, img, caixas }); })); } catch { }
             });
         }
 
@@ -739,6 +741,75 @@ namespace MiguelAngelusCast
         }
 
         DateTime esperaFeita;   // a celebração em que a tela de espera automática já entrou (não repete)
+        // (0.1.19) backlog 9.2: gravação da Missa inteira que liga sozinha (Ajustes › Transmissão; desligada de fábrica).
+        //  "camera":  quando uma câmera entra no Programa, de 15 min antes até 1h30 depois do horário da celebração;
+        //  "horario": GravarAntesMin minutos antes do horário da celebração (até 30 min depois, se o Cast abrir atrasado).
+        // O horário é o da capa (Capa.Cfg.Quando: a celebração da agenda do MiguelAngelus, ou o posto à mão na capa): fora
+        // dessa janela nunca liga, e cada celebração liga uma vez só (se o operador parar, não volta). Nunca liga a live.
+        // Para: com a live, como a opção 1 (Saida.Transmitir); sem live, quando o Encerramento fica 1 min no Programa
+        // ou 3 h depois do horário.
+        // (a capa passa para a próxima celebração 1h30 depois do horário: o limite usa o horário guardado ao ligar)
+        string gravAutoFeita = ""; DateTime gravAutoTique, gravAutoQuando = DateTime.MaxValue, encerramentoDesde = DateTime.MaxValue; bool gravAutoTeveLive;
+        void GravacaoAutomatica()
+        {
+            var agora = DateTime.Now;
+            if ((agora - gravAutoTique).TotalMilliseconds < 1000) return;
+            gravAutoTique = agora;
+            var c = Capa.Cfg; var quando = c.Quando;
+            if (saida.GravandoSozinho)
+            {
+                if (saida.AoVivo) { gravAutoTeveLive = true; encerramentoDesde = DateTime.MaxValue; return; }   // para com a live
+                if (gravAutoTeveLive) return;
+                var prog = mesa.ProgramaAtual;
+                bool fim = prog != null && mesa.Retrato.TryGetValue(prog, out var cn) && cn.fonte == "capa:fim";
+                if (!fim) encerramentoDesde = DateTime.MaxValue;
+                else if (encerramentoDesde == DateTime.MaxValue) encerramentoDesde = agora;
+                string porque = fim && (agora - encerramentoDesde).TotalSeconds >= 60 ? "o Encerramento ficou 1 min no ar"
+                    : gravAutoQuando != DateTime.MaxValue && agora > gravAutoQuando.AddHours(3) ? "passaram 3 h do horário da celebração" : null;
+                if (porque != null) { saida.Gravar(false); encerramentoDesde = DateTime.MaxValue; Registro.Info("gravação automática parada: " + porque); roteiro.AvisoExtra("⏺ Gravação da Missa parada sozinha: " + porque + "."); }
+                return;
+            }
+            gravAutoTeveLive = false; encerramentoDesde = DateTime.MaxValue;
+            var modo = saida.GravarAuto;
+            var chave = ChaveCelebracao(quando);
+            // gravando à mão perto da celebração: ela já está gravada (parar à mão depois não faz ligar de novo)
+            if (saida.Gravando) { if (agora >= quando.AddMinutes(-60) && agora <= quando.AddMinutes(150)) gravAutoFeita = chave; return; }
+            if (modo != "camera" && modo != "horario") return;
+            if (gravAutoFeita == chave) return;
+            // depois do horário só liga por pouco tempo (o Cast reaberto no meio da Missa): 30 min pelo horário, 1h30 pela câmera
+            if (agora > quando.AddMinutes(modo == "horario" ? 30 : 90)) return;
+            string motivo;
+            if (modo == "horario")
+            {
+                if (agora < quando.AddMinutes(-Math.Clamp(saida.GravarAntesMin, 0, 60))) return;
+                motivo = $"horário da celebração ({quando:HH\\hmm}, {saida.GravarAntesMin} min antes)";
+            }
+            else
+            {
+                if (agora < quando.AddMinutes(-15)) return;
+                var cam = CameraNoPrograma(); if (cam == null) return;
+                motivo = $"a câmera \"{cam}\" entrou no Programa (celebração das {quando:HH\\hmm})";
+            }
+            gravAutoFeita = chave;
+            var e = saida.GravarSozinho(motivo);
+            gravAutoQuando = e == null ? quando : DateTime.MaxValue;
+            roteiro.AvisoExtra(e == null ? "⏺ Gravação da Missa ligada sozinha: " + motivo + "." : "⏺ Não deu para ligar a gravação sozinha: " + e);
+        }
+        static string ChaveCelebracao(DateTime q) => q.ToString("yyyy-MM-ddTHH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        // nome da cena do Programa se ela mostra uma câmera: a câmera PTZ da cena, uma câmera de Ajustes › Câmeras pela imagem
+        // NDI, ou qualquer NDI que não seja do MiguelAngelus (telão/letras); capa, vídeo, imagem, cor e telas não contam
+        string CameraNoPrograma()
+        {
+            var prog = mesa.ProgramaAtual;
+            if (prog == null || !mesa.Retrato.TryGetValue(prog, out var cn)) return null;
+            var cena = mesa.Cfg.Cenas.FirstOrDefault(x => x.Id == prog);
+            if (cena != null && !string.IsNullOrEmpty(cena.Camera) && Cameras.Achar(cena.Camera) != null) return cn.nome;
+            if (cn.fonte == null || !cn.fonte.StartsWith("ndi:")) return null;
+            var ndi = cn.fonte.Substring(4);
+            if (Cameras.Lista.Any(x => x.Fonte == ndi)) return cn.nome;
+            return ndi.IndexOf("MiguelAngelus", StringComparison.OrdinalIgnoreCase) < 0 ? cn.nome : null;
+        }
+
         void EsperaAutomatica()
         {
             var c = Capa.Cfg; if (!c.EsperaAuto) return;
@@ -1385,6 +1456,11 @@ namespace MiguelAngelusCast
                     break;
                 case "gravarMomentos": saida.GravarMomentos = Sim("on"); break;
                 case "gravarComLive": saida.GravarComLive = Sim("on"); break;
+                // (0.1.19) nunca / com a live / 1ª câmera no Programa / horário (com os minutos de antecedência)
+                case "gravarAuto":
+                    if (m.TryGetProperty("antes", out var vAntes) && vAntes.ValueKind == JsonValueKind.Number) saida.GravarAntesMin = (int)Math.Round(vAntes.GetDouble());
+                    if (Txt("modo") != null) saida.GravarAuto = Txt("modo");
+                    break;
                 case "fazerEmPe": saida.Cfg.FazerEmPe = Sim("on"); saida.Salvar(); if (!saida.Cfg.FazerEmPe) Vertical.Parar(); Enviar(saida.Estado()); break;
                 // (0.1.15) versão em pé de qualquer vídeo gravado (ex.: a Missa baixada do YouTube Studio), com trecho opcional
                 case "emPeArquivo":

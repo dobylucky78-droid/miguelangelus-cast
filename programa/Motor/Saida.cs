@@ -35,6 +35,11 @@ namespace MiguelAngelusCast.Motor
         public bool GravarMomentos { get; set; } = true;   // (0.1.15) grava à parte os momentos marcados (a Homilia vem marcada)
         public bool FazerEmPe { get; set; } = true;        // (0.1.15) depois da Missa, faz a versão em pé (9:16) dos momentos gravados
         public bool GravarComLive { get; set; }            // (0.1.18) grava a Missa inteira junto com a transmissão (começa e para com ela)
+        // (0.1.19) backlog 9.2: escolha única de quando a gravação da Missa inteira liga sozinha:
+        //   "" nunca (de fábrica) | "live" junto com a transmissão (= GravarComLive) | "camera" quando a 1ª câmera entra no
+        //   Programa | "horario" no horário da celebração, GravarAntesMin minutos antes. null = arquivo antigo (vem do GravarComLive)
+        public string GravarAuto { get; set; }
+        public int GravarAntesMin { get; set; } = 5;
         public List<DestinoCfg> Destinos { get; set; } = new List<DestinoCfg>();
     }
 
@@ -82,7 +87,11 @@ namespace MiguelAngelusCast.Motor
                 Cfg.Destinos.Add(new DestinoCfg { Id = "instagram", Nome = "Instagram", Tipo = "instagram", Servidor = "", Ligado = false });
             }
             Cfg.PastaGravacao ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "MiguelAngelus Cast");
+            Cfg.GravarAuto ??= Cfg.GravarComLive ? "live" : "";
+            if (!ModosGravarAuto.Contains(Cfg.GravarAuto)) Cfg.GravarAuto = "";
+            Cfg.GravarComLive = Cfg.GravarAuto == "live";
         }
+        public static readonly string[] ModosGravarAuto = { "", "live", "camera", "horario" };
         public void Salvar() { try { File.WriteAllText(arquivoCfg, JsonSerializer.Serialize(Cfg, new JsonSerializerOptions { WriteIndented = true })); } catch (Exception e) { Registro.Erro("gravar saida.json", e); } }
 
         public void Configurar(int largura, int altura, int qps) { L = largura; A = altura; Qps = qps; }
@@ -115,7 +124,7 @@ namespace MiguelAngelusCast.Motor
                 {
                     if (rets.TryGetValue("gravacao", out var r)) { r.Parar(); rets.Remove("gravacao"); }
                     if (!AoVivo && rets.TryGetValue("parte", out var rp)) { rp.Parar(); rets.Remove("parte"); ParteNome = null; relParte = null; }
-                    Gravando = false; relGrav = null; gravouComLive = false; Registro.Info("gravação parada");
+                    Gravando = false; relGrav = null; gravouSozinho = false; Registro.Info("gravação parada");
                     PararCodificadorSeOcioso();
                 }
             }
@@ -129,8 +138,25 @@ namespace MiguelAngelusCast.Motor
         string arquivoParte; Stopwatch relParte;
         public string ArquivoParte => ParteNome != null ? arquivoParte : null;
         public bool GravarMomentos { get => Cfg.GravarMomentos; set { Cfg.GravarMomentos = value; Salvar(); Mudou?.Invoke(); } }
-        public bool GravarComLive { get => Cfg.GravarComLive; set { Cfg.GravarComLive = value; Salvar(); Mudou?.Invoke(); } }
-        bool gravouComLive;                              // (0.1.18) a gravação foi ligada pela live: para junto com ela
+        // (0.1.18) chave antiga (botões, telas velhas): ligar = "live"; desligar só desliga se estava em "live"
+        public bool GravarComLive { get => Cfg.GravarAuto == "live"; set { if (value) GravarAuto = "live"; else if (Cfg.GravarAuto == "live") GravarAuto = ""; } }
+        public string GravarAuto
+        {
+            get => Cfg.GravarAuto ?? "";
+            set { Cfg.GravarAuto = ModosGravarAuto.Contains(value ?? "") ? value ?? "" : ""; Cfg.GravarComLive = Cfg.GravarAuto == "live"; Salvar(); Mudou?.Invoke(); }
+        }
+        public int GravarAntesMin { get => Cfg.GravarAntesMin; set { Cfg.GravarAntesMin = Math.Clamp(value, 0, 60); Salvar(); Mudou?.Invoke(); } }
+        // a gravação foi ligada sozinha (com a live, pela câmera ou pelo horário): para junto com a live, como a opção 1
+        bool gravouSozinho;
+        public bool GravandoSozinho => Gravando && gravouSozinho;
+        public string GravarSozinho(string motivo)
+        {
+            if (Gravando) return null;
+            var e = Gravar(true);
+            if (e == null) { gravouSozinho = true; Registro.Info("gravação ligada sozinha: " + motivo); Mudou?.Invoke(); }
+            else Registro.Info($"não deu para gravar sozinho ({motivo}): {e}");
+            return e;
+        }
         public string GravarParte(string nome)
         {
             lock (trava)
@@ -190,13 +216,9 @@ namespace MiguelAngelusCast.Motor
                 }
             }
             // (0.1.18) "Gravar junto com a transmissão": liga com a live; para com ela só se foi ligada por ela
-            if (ligar && Cfg.GravarComLive && !Gravando)
-            {
-                var e = Gravar(true);
-                if (e == null) { gravouComLive = true; Registro.Info("gravação ligada junto com a transmissão"); }
-                else Registro.Info("não deu para gravar junto com a transmissão: " + e);
-            }
-            else if (!ligar && gravouComLive && Gravando) Gravar(false);
+            // (0.1.19) a gravação ligada pela 1ª câmera ou pelo horário também para com a live
+            if (ligar && Cfg.GravarAuto == "live" && !Gravando) GravarSozinho("junto com a transmissão");
+            else if (!ligar && gravouSozinho && Gravando) { Registro.Info("gravação automática parada junto com a transmissão"); Gravar(false); }
             Mudou?.Invoke(); return null;
         }
 
@@ -371,7 +393,7 @@ namespace MiguelAngelusCast.Motor
                     }),
                     gravacao = rets.TryGetValue("gravacao", out var g) ? g.Estado : "",
                     parte = ParteNome ?? "", tempoParte = relParte == null ? "" : relParte.Elapsed.ToString(@"hh\:mm\:ss"),
-                    arquivoParte = ParteNome != null ? Path.GetFileName(arquivoParte) : "", gravarMomentos = Cfg.GravarMomentos, gravarComLive = Cfg.GravarComLive, fazerEmPe = Cfg.FazerEmPe, vertical = Vertical.Estado, ocupado = Vertical.Rodando || Cortes.Rodando, nuvemCortes = Nuvem.Homilias.Estado, nuvemRodando = Nuvem.Homilias.Rodando
+                    arquivoParte = ParteNome != null ? Path.GetFileName(arquivoParte) : "", gravarMomentos = Cfg.GravarMomentos, gravarComLive = Cfg.GravarAuto == "live", gravarAuto = Cfg.GravarAuto ?? "", gravarAntes = Cfg.GravarAntesMin, gravandoSozinho = Gravando && gravouSozinho, fazerEmPe = Cfg.FazerEmPe, vertical = Vertical.Estado, ocupado = Vertical.Rodando || Cortes.Rodando, nuvemCortes = Nuvem.Homilias.Estado, nuvemRodando = Nuvem.Homilias.Rodando
                 };
             }
         }

@@ -95,6 +95,9 @@ namespace MiguelAngelusCast.Motor
         public string Padroeiro { get; set; } = "";
         public bool MostrarParoquia { get; set; }
         public List<EstiloCapa> Estilos { get; set; } = new();
+        // (0.1.19, backlog 8.7) ajustes à mão na prévia, guardados por disposição: modelo → item (titulo | textos | imagem | marcas)
+        // → [dx, dy, escala], com dx/dy em fração da largura/altura. Sem ajuste, vale a disposição pronta.
+        public Dictionary<string, Dictionary<string, double[]>> Ajustes { get; set; } = new();
 
         static DateTime ProximoDomingo()
         {
@@ -320,8 +323,30 @@ namespace MiguelAngelusCast.Motor
             _ => new Lay { iL = .568f, iT = .085f, iW = .344f, iH = .83f, tL = .067f, tT = .09f, tW = .47f, tit = 9.6f, esticar = true, chamada = true, forma = "arco", posY = .25f },
         };
 
-        /// <summary>Desenha a capa. modo: capa | espera | fim.</summary>
-        public static Bitmap Desenhar(string modo, int W = 1920, int H = 1080, CapaCfg c = null, DateTime? agora = null)
+        // (0.1.19, backlog 8.7) ajuste de um item: desloca (fração de W/H) e muda o tamanho a partir de um ponto de origem
+        readonly struct Aj
+        {
+            public readonly float dx, dy, s;
+            public Aj(float dx, float dy, float s) { this.dx = dx; this.dy = dy; this.s = s; }
+            public bool Nada => dx == 0 && dy == 0 && s == 1;
+        }
+        static Aj AjDe(CapaCfg c, string item)
+        {
+            if (c.Ajustes != null && c.Ajustes.TryGetValue(c.Modelo ?? "arco", out var d) && d != null && d.TryGetValue(item, out var a) && a != null && a.Length >= 3
+                && !double.IsNaN(a[0]) && !double.IsNaN(a[1]) && !double.IsNaN(a[2]))
+                return new Aj((float)Math.Clamp(a[0], -1, 1), (float)Math.Clamp(a[1], -1, 1), (float)Math.Clamp(a[2] <= 0 ? 1 : a[2], .3, 3));
+            return new Aj(0, 0, 1);
+        }
+        static RectangleF Tr(RectangleF r, float ox, float oy, Aj a, int W, int H) =>
+            new RectangleF(ox + (r.X - ox) * a.s + a.dx * W, oy + (r.Y - oy) * a.s + a.dy * H, r.Width * a.s, r.Height * a.s);
+        static void Transformar(Graphics g, float ox, float oy, Aj a, int W, int H)
+        {
+            if (a.Nada) return;
+            g.TranslateTransform(ox + a.dx * W, oy + a.dy * H); g.ScaleTransform(a.s, a.s); g.TranslateTransform(-ox, -oy);
+        }
+
+        /// <summary>Desenha a capa. modo: capa | espera | fim. caixas: se vier, recebe onde ficou cada item ajustável (pixels).</summary>
+        public static Bitmap Desenhar(string modo, int W = 1920, int H = 1080, CapaCfg c = null, DateTime? agora = null, Dictionary<string, RectangleF> caixas = null)
         {
             c ??= cfg;
             lock (trava)
@@ -352,11 +377,15 @@ namespace MiguelAngelusCast.Motor
                 {
                     bool cheia = c.Modelo == "faixa" || c.Modelo == "dividida";
                     float iw = L.iW * W, ih = L.iH < 0 ? iw : L.iH * H, ix = L.iL * W, iy = L.iT * H;
+                    var aI = AjDe(c, "imagem");
+                    if (!aI.Nada) { ix += aI.dx * W; iy += aI.dy * H; iw *= aI.s; ih *= aI.s; }
                     var caixaImg = new RectangleF(ix, iy, iw, ih);
+                    if (caixas != null) caixas["imagem"] = caixaImg;
                     if (cheia && foto == null)
                     {
                         // sem foto: o símbolo num canto livre, sem cobrir o texto
-                        var r = c.Modelo == "faixa" ? new RectangleF(.66f * W, .1f * H, .28f * W, .8f * H) : caixaImg;
+                        var r = c.Modelo == "faixa" ? Tr(new RectangleF(.66f * W, .1f * H, .28f * W, .8f * H), .66f * W, .1f * H, aI, W, H) : caixaImg;
+                        if (caixas != null) caixas["imagem"] = r;
                         if (c.Modelo == "dividida") using (var lg = new LinearGradientBrush(RectangleF.Inflate(r, 1, 1), P.I1, P.I2, 70f)) g.FillRectangle(lg, r);
                         Simbolo(g, r, P.Acento, null, u);
                     }
@@ -420,9 +449,12 @@ namespace MiguelAngelusCast.Motor
                 var marcas = new List<Bitmap>();
                 if (c.UsarMarca1 && Img(c.Marca1) is Bitmap m1) marcas.Add(m1);
                 if (c.UsarMarca2 && Img(c.Marca2) is Bitmap m2) marcas.Add(m2);
+                Aj aTx = AjDe(c, "textos"), aTit = AjDe(c, "titulo"), aM = AjDe(c, "marcas");
+                bool medindo = false;
 
                 float Textos(float y)
                 {
+                    float yBloco = y;
                     string eyebrow = fim ? "Obrigado por participar" : espera ? "Em instantes, ao vivo" : "Transmissão ao vivo";
                     using var fEb = Fonte(LT.Forte, 1.15f * u, LT.ForteEstilo);
                     using var bAc = new SolidBrush(P.Acento); using var bTi = new SolidBrush(tinta); using var bSu = new SolidBrush(suave);
@@ -434,7 +466,16 @@ namespace MiguelAngelusCast.Motor
                     while (g.MeasureString(titulo, fTit, PointF.Empty, StringFormat.GenericTypographic).Width > tw && tam > L.tit * u * LT.TitEscala * .55f)
                     { fTit.Dispose(); tam *= .94f; fTit = Fonte(LT.Tit, tam, LT.TitEstilo, true); }
                     float lhTit = LT.Tit == "Gabriola" ? .78f : .95f;
-                    y += Bloco(g, titulo, fTit, bTi, x0, y - .08f * tam, tw, L.centro, lhTit) - .08f * tam;
+                    {
+                        // (0.1.19) o título pode ser movido e mudar de tamanho à parte; o resto continua no lugar dele
+                        float oxT = L.centro ? x0 + tw / 2 : x0, yTit = y;
+                        var stT = g.Save(); Transformar(g, oxT, yTit, aTit, W, H);
+                        float hT = Bloco(g, titulo, fTit, bTi, x0, y - .08f * tam, tw, L.centro, lhTit) - .08f * tam;
+                        g.Restore(stT);
+                        if (caixas != null && !medindo)
+                            caixas["titulo"] = Tr(Tr(new RectangleF(x0, yTit, tw, Math.Max(hT, u)), oxT, yTit, aTit, W, H), x0, yBloco, aTx, W, H);
+                        y += hT * aTit.s;
+                    }
                     fTit.Dispose();
 
                     // divisor
@@ -521,7 +562,7 @@ namespace MiguelAngelusCast.Motor
                     if (mm.Count > 0 || temCeleb)
                     {
                         y += 2.6f * u;
-                        float lh = 4.8f * u * esc, wPlaca = 0;
+                        float lh = 4.8f * u * esc * aM.s, wPlaca = 0;
                         foreach (var m in mm) wPlaca += lh * m.Width / m.Height;
                         if (mm.Count > 0) wPlaca += 2 * u + (mm.Count - 1) * u;
                         using var fCe = Fonte(LT.Corpo, 1.35f * u, FontStyle.Regular); using var fCeB = Fonte(LT.Forte, 1.35f * u, LT.ForteEstilo);
@@ -529,7 +570,8 @@ namespace MiguelAngelusCast.Motor
                         float total = wPlaca + (mm.Count > 0 && temCeleb ? 1.5f * u : 0) + wCel, hx = L.centro ? x0 + (tw - total) / 2 : x0, hPl = lh + 1.2f * u;
                         if (mm.Count > 0)
                         {
-                            Placa(g, mm, hx, y, lh, u);
+                            Placa(g, mm, hx + aM.dx * W, y + aM.dy * H, lh, u);
+                            if (caixas != null && !medindo) caixas["marcas"] = Tr(new RectangleF(hx + aM.dx * W, y + aM.dy * H, wPlaca, hPl), x0, yBloco, aTx, W, H);
                             hx += wPlaca + 1.5f * u;
                         }
                         if (temCeleb)
@@ -543,27 +585,37 @@ namespace MiguelAngelusCast.Motor
                     return y;
                 }
 
-                float y0 = L.tT * H;
+                float y0 = L.tT * H, alto = 0;
+                if (L.ancora != "topo" || caixas != null)
+                {
+                    var st = g.Save(); g.SetClip(new Rectangle(0, 0, 0, 0)); medindo = true;
+                    alto = Textos(0);
+                    medindo = false; g.Restore(st);
+                }
                 if (L.ancora != "topo")
                 {
-                    var st = g.Save(); g.SetClip(new Rectangle(0, 0, 0, 0));
-                    float alto = Textos(0);
-                    g.Restore(st);
                     float livre = (L.tB - L.tT) * H;
                     y0 = L.ancora == "baixo" ? L.tB * H - alto : L.tT * H + (livre - alto) / 2;
                     y0 = Math.Max(L.tT * H * (L.ancora == "baixo" ? .3f : 1f), y0);
                 }
-                Textos(y0);
+                {
+                    // (0.1.19) o bloco de textos inteiro pode ser movido e mudar de tamanho (a partir do canto de cima, à esquerda)
+                    var stB = g.Save(); Transformar(g, x0, y0, aTx, W, H);
+                    Textos(y0);
+                    g.Restore(stB);
+                    if (caixas != null) caixas["textos"] = Tr(new RectangleF(x0, y0, tw, Math.Max(alto, u)), x0, y0, aTx, W, H);
+                }
 
                 // marcas num canto
                 if (!marcasNoTexto && marcas.Count > 0)
                 {
-                    float lh = 3.6f * u * esc, wPlaca = 2 * u + (marcas.Count - 1) * u;
+                    float lh = 3.6f * u * esc * aM.s, wPlaca = 2 * u + (marcas.Count - 1) * u;
                     foreach (var m in marcas) wPlaca += lh * m.Width / m.Height;
                     float hPl = lh + 1.2f * u, mx = 3.2f * u, my = 3.2f * u;
                     string pos = c.MarcasPos;
-                    float px0 = pos.EndsWith("dir") ? W - mx - wPlaca : mx, py0 = pos.StartsWith("inf") ? H - my - hPl : my;
+                    float px0 = (pos.EndsWith("dir") ? W - mx - wPlaca : mx) + aM.dx * W, py0 = (pos.StartsWith("inf") ? H - my - hPl : my) + aM.dy * H;
                     Placa(g, marcas, px0, py0, lh, u);
+                    if (caixas != null) caixas["marcas"] = new RectangleF(px0, py0, wPlaca, hPl);
                 }
 
                 // moldura por cima de tudo
@@ -577,6 +629,17 @@ namespace MiguelAngelusCast.Motor
             using var b = Desenhar(modo, W, H); using var ms = new MemoryStream(); b.Save(ms, ImageFormat.Png); return ms.ToArray();
         }
         public static string JpegBase64(string modo, CapaCfg c, int W = 960, int H = 540) => Convert.ToBase64String(Jpeg(modo, W, H, c));
+        /// <summary>(0.1.19) a prévia e onde ficou cada item ajustável, em fração da tela: [x, y, largura, altura].</summary>
+        public static string JpegBase64(string modo, CapaCfg c, out Dictionary<string, double[]> caixas, int W = 960, int H = 540)
+        {
+            var px = new Dictionary<string, RectangleF>();
+            using var b = Desenhar(modo, W, H, c, null, px); using var ms = new MemoryStream();
+            var enc = Array.Find(ImageCodecInfo.GetImageEncoders(), e => e.FormatID == ImageFormat.Jpeg.Guid);
+            using var ps = new EncoderParameters(1); ps.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
+            b.Save(ms, enc, ps);
+            caixas = px.ToDictionary(k => k.Key, k => new[] { Math.Round(k.Value.X / W, 4), Math.Round(k.Value.Y / H, 4), Math.Round(k.Value.Width / W, 4), Math.Round(k.Value.Height / H, 4) });
+            return Convert.ToBase64String(ms.ToArray());
+        }
         // (0.0.8) miniatura do YouTube: JPEG 1280×720 (o limite de lá é 2 MB; fica em ~200–400 KB)
         public static byte[] Jpeg(string modo, int W = 1280, int H = 720, CapaCfg c = null, long qualidade = 90)
         {
