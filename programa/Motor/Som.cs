@@ -199,7 +199,14 @@ namespace MiguelAngelusCast.Motor
             int a = Math.Clamp(sel[0], 0, ch - 1), b = sel.Length > 1 ? Math.Clamp(sel[1], 0, ch - 1) : a;
             float g = (float)Math.Pow(10, Cfg.GanhoDb / 20);
             var st = new float[quadros * 2];
-            for (int i = 0; i < quadros; i++) { st[i * 2] = src[i * ch + a] * g; st[i * 2 + 1] = src[i * ch + b] * g; }
+            int noTeto = 0;
+            for (int i = 0; i < quadros; i++)
+            {
+                float va = src[i * ch + a], vb = src[i * ch + b];
+                if (Math.Abs(va) >= 0.985f || Math.Abs(vb) >= 0.985f) noTeto++;   // (0.1.21) chegou no máximo antes do ganho: a mesa está estourando
+                st[i * 2] = va * g; st[i * 2 + 1] = vb * g;
+            }
+            ContarEstouro(noTeto, quadros);
 
             if (conv != null)
             {
@@ -212,6 +219,25 @@ namespace MiguelAngelusCast.Motor
             }
             else Depois(st, st.Length);
         }
+
+        // (0.1.21) Missa de 22/11/2026: a Aux da live estava com a luz vermelha acesa na mesa (+6,9 dB) e o som já chegava cortado.
+        // Conta, a cada segundo de som, quantas amostras chegaram no máximo; 3 segundos assim nos últimos 30 s = aviso.
+        int amostrasSeg, tetoSeg; readonly System.Collections.Generic.Queue<DateTime> segundosEstourados = new System.Collections.Generic.Queue<DateTime>();
+        void ContarEstouro(int noTeto, int quadros)
+        {
+            int taxa = taxaEntrada > 0 ? taxaEntrada : Taxa;
+            tetoSeg += noTeto; amostrasSeg += quadros;
+            if (amostrasSeg < taxa) return;
+            var agora = DateTime.Now;
+            lock (segundosEstourados)
+            {
+                if (tetoSeg >= 3) segundosEstourados.Enqueue(agora);
+                while (segundosEstourados.Count > 0 && (agora - segundosEstourados.Peek()).TotalSeconds > 30) segundosEstourados.Dequeue();
+            }
+            if (tetoSeg >= 3 && segundosEstourados.Count == 3) Registro.Info("som: a entrada está chegando estourada (no máximo) — baixe a Aux na mesa");
+            amostrasSeg = tetoSeg = 0;
+        }
+        public bool Estourando { get { lock (segundosEstourados) { var agora = DateTime.Now; return segundosEstourados.Count(t => (agora - t).TotalSeconds <= 30) >= 3; } } }
 
         // já em 48 kHz: nivelador + limitador, medidor (mostra o que vai para a transmissão), mudo
         void Depois(float[] s, int n)

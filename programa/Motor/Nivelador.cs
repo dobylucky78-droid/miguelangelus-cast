@@ -42,8 +42,11 @@ namespace MiguelAngelusCast.Motor
         // (0.1.18) blocos de 100 ms, com som, em que nem o máximo do nivelador chega ao alvo; ~1,5 min = aviso de som baixo
         int blocosNoTeto;
         public bool SomBaixo => Ligado && blocosNoTeto >= 900;
+        // (0.1.21) o nivelador subindo mais de +12 dB por ~1 min de som: sobe também o eco e o chiado; melhor subir a Aux na mesa
+        int blocosAlto;
+        public bool GanhoAlto => Ligado && blocosAlto >= 600;
 
-        public void Zerar() { Array.Clear(zp); Array.Clear(zh); Array.Clear(blocos); nBlocos = iBloco = amostrasBloco = 0; somaBloco = 0; Array.Clear(atraso); env = segura = 1f; blocosNoTeto = 0; }
+        public void Zerar() { Array.Clear(zp); Array.Clear(zh); Array.Clear(blocos); nBlocos = iBloco = amostrasBloco = 0; somaBloco = 0; Array.Clear(atraso); env = segura = 1f; blocosNoTeto = 0; blocosAlto = 0; }
 
         static double Biquad(double x, double[] c, double[] z, int k)
         {
@@ -113,6 +116,8 @@ namespace MiguelAngelusCast.Motor
                 // (0.1.18) som baixo da mesa: o nivelador pediu mais do que pode subir; conta só os blocos com som
                 if (Ligado && AlvoLufs - LufsEntrada > MaxSubirDb + 2) { if (blocosNoTeto < 100000) blocosNoTeto++; }
                 else if (blocosNoTeto > 0) blocosNoTeto = Math.Max(0, blocosNoTeto - 3);
+                if (Ligado && ganhoDb > 12) { if (blocosAlto < 100000) blocosAlto++; }
+                else if (blocosAlto > 0) blocosAlto = Math.Max(0, blocosAlto - 3);
             }
             // velocidade: sobe devagar (2 dB/s), desce mais rápido (6 dB/s) — a cada bloco de 100 ms
             double passo = alvoGanhoDb > ganhoDb ? 0.2 : 0.6;

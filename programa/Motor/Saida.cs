@@ -80,6 +80,8 @@ namespace MiguelAngelusCast.Motor
         {
             try { if (File.Exists(arquivoCfg)) Cfg = JsonSerializer.Deserialize<SaidaCfg>(File.ReadAllText(arquivoCfg)); } catch (Exception e) { Registro.Erro("ler saida.json", e); }
             Cfg ??= new SaidaCfg();
+            // (0.1.21) o h264_mf guardado pelo automático é esquecido logo ao abrir (o Ajustes já mostra a nova escolha depois da 1ª live/teste)
+            if (Cfg.CodificadorDetectado == "h264_mf") Cfg.CodificadorDetectado = null;
             if (Cfg.Destinos.Count == 0)
             {
                 Cfg.Destinos.Add(new DestinoCfg { Id = "youtube", Nome = "YouTube", Tipo = "youtube", Servidor = Servidores.Padrao("youtube") });
@@ -270,12 +272,17 @@ namespace MiguelAngelusCast.Motor
             _ => $"-c:v {c} -b:v {k}k"
         };
 
-        // "auto": a placa de vídeo primeiro (Intel, NVIDIA, AMD), depois o do Windows, depois o OpenH264. Testa uma vez e guarda.
+        // "auto": a placa de vídeo primeiro (Intel, NVIDIA, AMD), depois o OpenH264, e o do Windows só em último caso. Testa uma vez e guarda.
+        // (0.1.21) O do Windows (h264_mf) estragava o som da live: na Missa de 22/11/2026 o som saía "fritando", dobrado e com o tom
+        // mudando (o YouTube esticava o som para acompanhar o vídeo); só trocando para o OpenH264 ficou limpo. Quem já tinha o h264_mf
+        // guardado pelo automático passa a escolher de novo.
+        public static readonly string[] OrdemCodificadores = { "h264_qsv", "h264_nvenc", "h264_amf", "libopenh264", "h264_mf" };
         string EscolherCodificador()
         {
             if (Cfg.Codificador != "auto") return Cfg.Codificador;
+            if (Cfg.CodificadorDetectado == "h264_mf") { Registro.Info("codificador: o do Windows estava guardado; escolhendo de novo (0.1.21)"); Cfg.CodificadorDetectado = null; }
             if (!string.IsNullOrEmpty(Cfg.CodificadorDetectado) && Testar(Cfg.CodificadorDetectado)) return Cfg.CodificadorDetectado;
-            foreach (var c in new[] { "h264_qsv", "h264_nvenc", "h264_amf", "h264_mf", "libopenh264" })
+            foreach (var c in OrdemCodificadores)
                 if (Testar(c)) { Cfg.CodificadorDetectado = c; Salvar(); Registro.Info("codificador escolhido: " + c); return c; }
             return null;
         }

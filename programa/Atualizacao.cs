@@ -51,6 +51,16 @@ namespace MiguelAngelusCast
         }
         static Version Normalizar(Version v) => new Version(v.Major, v.Minor, Math.Max(0, v.Build), Math.Max(0, v.Revision));
 
+        // (0.1.21) o GitHub responde 403/429 com X-RateLimit-Remaining: 0 e X-RateLimit-Reset (segundos Unix) quando passa do limite
+        static bool LimiteZerado(System.Net.Http.HttpResponseMessage resp, out DateTime? volta)
+        {
+            volta = null;
+            string H(string n) => resp.Headers.TryGetValues(n, out var v) ? v.FirstOrDefault() : null;
+            if (long.TryParse(H("X-RateLimit-Reset"), out var s)) volta = DateTimeOffset.FromUnixTimeSeconds(s).LocalDateTime;
+            else if (resp.Headers.RetryAfter?.Delta is TimeSpan d) volta = DateTime.Now + d;
+            return H("X-RateLimit-Remaining") == "0" || (int)resp.StatusCode == 429 || resp.Headers.RetryAfter != null;
+        }
+
         // {tipo:"atualizacao", ok, ligada, atual, nova, notas, url, nome, tamanho, erro}
         public static async Task<object> Verificar()
         {
@@ -63,6 +73,12 @@ namespace MiguelAngelusCast
                 {
                     using var resp = await http.GetAsync(Url).ConfigureAwait(false);
                     if ((int)resp.StatusCode == 404) r = new { tipo = "atualizacao", ok = true, ligada = true, atual, nova = (string)null };
+                    // (0.1.21) 403/429 com o limite zerado: o GitHub pediu uma pausa (60 consultas por hora por internet) — não é falta de internet
+                    else if (((int)resp.StatusCode == 403 || (int)resp.StatusCode == 429) && LimiteZerado(resp, out var volta))
+                    {
+                        Registro.Info("procurar atualização: limite de consultas do GitHub" + (volta != null ? " até " + volta.Value.ToString("HH:mm") : ""));
+                        r = new { tipo = "atualizacao", ok = false, ligada = true, atual, nova = (string)null, erro = "O GitHub pediu uma pausa nas consultas" + (volta != null ? $"; tento de novo depois das {volta.Value:HH:mm}." : "; tento de novo mais tarde.") + " A internet está funcionando." };
+                    }
                     else
                     {
                         resp.EnsureSuccessStatusCode();

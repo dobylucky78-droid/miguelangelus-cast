@@ -396,7 +396,8 @@ $('#btnCriar').onclick = () => {
 // ---------- gravar e transmitir ----------
 const S = { aoVivo: false, gravando: false };
 let SC = null, codTestados = null;
-const nomeCod = c => ({ h264_qsv: 'Intel (placa)', h264_nvenc: 'NVIDIA (placa)', h264_amf: 'AMD (placa)', h264_mf: 'Windows', libopenh264: 'OpenH264 (processador)' })[c] || c;
+// (0.1.21) o do Windows (h264_mf) estragava o som da live: fica por último e com aviso
+const nomeCod = c => ({ h264_qsv: 'Intel (placa)', h264_nvenc: 'NVIDIA (placa)', h264_amf: 'AMD (placa)', h264_mf: 'Windows (⚠ pode estragar o som da live)', libopenh264: 'OpenH264 (processador)' })[c] || c;
 const corDest = e => /no ar|gravando/.test(e) ? 'var(--ok)' : /caiu|atrasado|parou/.test(e) ? 'var(--vivo)' : /conectando/.test(e) ? 'var(--av)' : 'var(--su)';
 
 function renderSaida(m) {
@@ -457,7 +458,7 @@ function renderAjSaida(m) {
 }
 function renderCod() {
   if (!SC) return;
-  const lista = codTestados || ['h264_qsv', 'h264_nvenc', 'h264_amf', 'h264_mf', 'libopenh264'];
+  const lista = codTestados || ['h264_qsv', 'h264_nvenc', 'h264_amf', 'libopenh264', 'h264_mf'];
   $('#ajCod').innerHTML = `<option value="auto">Automático${SC.detectado ? ' (' + nomeCod(SC.detectado) + ')' : ''}</option>` + lista.map(c => `<option value="${c}">${nomeCod(c)}</option>`).join('');
   $('#ajCod').value = SC.codificador; if (!$('#ajCod').value) $('#ajCod').value = 'auto';
 }
@@ -1252,22 +1253,40 @@ $('#inIrCapa').onclick = irCapa; $('#inEditarCapa').onclick = irCapa;
 $('#inPreparar').onclick = () => { if (IN.iniciado) { document.querySelector('nav [data-tela="mesa"]').click(); return; } enviar({ tipo: 'inicioPreparar' }); };
 $('#inIrMesa').onclick = () => document.querySelector('nav [data-tela="mesa"]').click();
 // ---------- aparência ----------
+// (0.1.21) zoom do programa inteiro pelo WebView2 (ZoomFactor), de 50 % a 200 %: Ctrl + rodinha, Ctrl +/−/0 e os botões em Aparência.
+// Antes era o zoom do CSS (0,9 / 1 / 1,15), que desalinhava o mouse nas setas e nos arrastos; o valor antigo vira o passo mais perto.
+const PASSOS_ZOOM = [0.5, 0.6, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const AP = { grandes: false, zoom: 1 };
 try { AP.grandes = localStorage.getItem('cast.grandes') === '1'; AP.zoom = +(localStorage.getItem('cast.zoom') || 1); } catch {}
+const passoMaisPerto = z => PASSOS_ZOOM.reduce((a, b) => Math.abs(b - z) < Math.abs(a - z) ? b : a, 1);
+AP.zoom = passoMaisPerto(isFinite(AP.zoom) && AP.zoom > 0 ? AP.zoom : 1);
 function aplicarAparencia() {
   $('#app').classList.toggle('grandes', AP.grandes);
-  document.body.style.zoom = AP.zoom;
+  document.body.style.zoom = '';
+  enviar({ tipo: 'zoom', fator: AP.zoom });
+  const v = $('#apZoomValor'); if (v) v.textContent = Math.round(AP.zoom * 100) + '%';
   try { localStorage.setItem('cast.grandes', AP.grandes ? '1' : '0'); localStorage.setItem('cast.zoom', AP.zoom); } catch {}
+}
+function mudarZoom(passo) {
+  const i = PASSOS_ZOOM.indexOf(AP.zoom);
+  AP.zoom = passo === 0 ? 1 : PASSOS_ZOOM[Math.max(0, Math.min(PASSOS_ZOOM.length - 1, (i < 0 ? 6 : i) + passo))];
+  aplicarAparencia(); renderAparencia();
 }
 function renderAparencia() {
   $$('[data-tema]').forEach(b => b.classList.toggle('ligado', b.dataset.tema === tema));
   $('#apGrandes').textContent = AP.grandes ? 'Ligado' : 'Desligado'; $('#apGrandes').classList.toggle('ligado', AP.grandes);
-  $$('[data-zoom]').forEach(b => b.classList.toggle('ligado', +b.dataset.zoom === AP.zoom));
 }
 aplicarAparencia();
 $$('[data-tema]').forEach(b => b.onclick = () => { tema = b.dataset.tema; aplicarTema(tema); renderAparencia(); });
 $('#apGrandes').onclick = () => { AP.grandes = !AP.grandes; aplicarAparencia(); renderAparencia(); };
-$$('[data-zoom]').forEach(b => b.onclick = () => { AP.zoom = +b.dataset.zoom; aplicarAparencia(); renderAparencia(); });
+$$('[data-zoompasso]').forEach(b => b.onclick = () => mudarZoom(+b.dataset.zoompasso));
+document.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); mudarZoom(e.deltaY < 0 ? 1 : -1); }, { passive: false });
+document.addEventListener('keydown', e => {
+  if (!e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === '+' || e.key === '=') { e.preventDefault(); mudarZoom(1); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); mudarZoom(-1); }
+  else if (e.key === '0') { e.preventDefault(); mudarZoom(0); }
+}, true);
 
 // ---------- rede e MiguelAngelus ----------
 function renderRede(m) {

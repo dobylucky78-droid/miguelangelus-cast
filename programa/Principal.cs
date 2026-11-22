@@ -512,6 +512,11 @@ namespace MiguelAngelusCast
             // (0.1.18) o nivelador no máximo por mais de 1,5 min de som: a mesa manda baixo demais
             if (som.Cfg.Nivelar && som.Nivel2.SomBaixo)
                 return $"o som está chegando baixo da mesa (o nivelador está no máximo, +{som.Nivel2.MaxSubirDb:0} dB): suba o volume da saída (Aux) que vai para este computador";
+            // (0.1.21) a entrada chegando no máximo: a Aux está estourando na mesa (luz vermelha) e o som já vem cortado
+            if (som.Estourando)
+                return "o som da mesa está chegando estourado (no máximo): baixe a saída (Aux) que vai para este computador até a luz vermelha da mesa não acender";
+            if (som.Cfg.Nivelar && som.Nivel2.GanhoAlto)
+                return $"o nivelador está subindo muito o som (+{som.Nivel2.GanhoDb:0} dB), o que realça eco e chiado: suba um pouco a saída (Aux) na mesa ou deixe o Ganho em 0 dB";
             return null;
         }
         string NomeSom()
@@ -944,6 +949,14 @@ namespace MiguelAngelusCast
                     Enviar(saida.Estado()); EnviarSaidaCfg(); EnviarSomCfg(true);
                     break;
                 case "pedirSom": EnviarSomCfg(true); break;
+                // (0.1.21) zoom do programa inteiro (Ctrl + rodinha / Ctrl +/−/0 / Aparência), de 50 % a 200 %
+                case "zoom":
+                    if (m.TryGetProperty("fator", out var zf) && zf.ValueKind == JsonValueKind.Number)
+                    {
+                        var f = Math.Clamp(zf.GetDouble(), 0.5, 2.0);
+                        if (Math.Abs(web.ZoomFactor - f) > 0.001) web.ZoomFactor = f;
+                    }
+                    break;
                 // ---------- roteiro ----------
                 case "rotPedir": EnviarRoteiro(null); break;
                 case "rotEscolher": roteiro.Escolher(Txt("id")); break;
@@ -1692,7 +1705,7 @@ namespace MiguelAngelusCast
                 case "testarCodificadores":
                     System.Threading.Tasks.Task.Run(() =>
                     {
-                        var ok = new[] { "h264_qsv", "h264_nvenc", "h264_amf", "h264_mf", "libopenh264" }.Where(Transmissor.Testar).ToList();
+                        var ok = Transmissor.OrdemCodificadores.Where(Transmissor.Testar).ToList();
                         Na(() => Enviar(new { tipo = "codificadores", lista = ok }));
                     });
                     break;
