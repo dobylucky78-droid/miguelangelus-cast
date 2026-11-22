@@ -4,10 +4,10 @@
   const env = o => window.chrome?.webview?.postMessage(o);
   let toastT;
 
-  function toast(texto, erro) {
+  function toast(texto, erro, origem) {
     let t = el('btToast');
     if (!t) { t = document.createElement('div'); t.id = 'btToast'; document.body.appendChild(t); }
-    t.textContent = 'Stream Deck · ' + texto; t.classList.toggle('erro', !!erro); t.classList.add('vis');
+    t.textContent = (origem === 'celular' ? '📱 Celular · ' : 'Stream Deck · ') + texto; t.classList.toggle('erro', !!erro); t.classList.add('vis');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('vis'), erro ? 3500 : 1800);
   }
 
@@ -15,7 +15,7 @@
     const m = e.data;
     if (m?.tipo === 'botao') {
       const erro = (m.texto || '').startsWith('!');
-      toast(erro ? m.texto.slice(1) : m.texto, erro);
+      toast(erro ? m.texto.slice(1) : m.texto, erro, m.origem);
     } else if (m?.tipo === 'botoes') {
       el('btPorta').textContent = m.porta ? `127.0.0.1:${m.porta} · ligada` : `desligada (${m.erro || 'erro'})`;
       el('btExemplo').textContent = m.exemplo || '';

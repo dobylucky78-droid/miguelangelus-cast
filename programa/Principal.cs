@@ -46,7 +46,7 @@ namespace MiguelAngelusCast
             {
                 if ((saida.AoVivo || saida.Gravando) && MessageBox.Show(this, (saida.AoVivo ? "A transmissão está no ar" : "A gravação está ligada") + ".\n\nEncerrar e fechar o Cast?", "MiguelAngelus Cast", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 { e.Cancel = true; return; }
-                Controle.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose();
+                Controle.Parar(); Celular.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose();
                 // (0.1.12) leva para a nuvem o que mudou nesta sessão (até 8 s; sem internet, vai na próxima vez)
                 if (Nuvem.Ligada) try { System.Threading.Tasks.Task.Run(() => Nuvem.Sincronizar(false)).Wait(8000); } catch { }
                 Registro.Info("fechou");
@@ -109,6 +109,11 @@ namespace MiguelAngelusCast
                 Controle.Executar = Botao;
                 Controle.Estado = EstadoBotoes;
                 Controle.Iniciar();
+                // (0.1.20) controle pelo celular (pareamento próprio do Cast; vem desligado)
+                Celular.Executar = Botao;
+                Celular.Estado = EstadoBotoes;
+                Celular.Mudou += () => Na(EnviarCelular);
+                Celular.Iniciar();
                 // (0.1.11) atalhos dos botões feitos com o Cast em outra pasta (pen drive, zip) passam a abrir este; nunca numa cópia de teste
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CAST_DADOS")))
                     _ = System.Threading.Tasks.Task.Run(() => { try { Controle.ReapontarAtalhos(PastaBotoes); } catch (Exception ex) { Registro.Erro("atalhos dos botões", ex); } });
@@ -384,9 +389,17 @@ namespace MiguelAngelusCast
                 case "abrir": r = Abrir((P("programa") ?? "cast").ToLowerInvariant()); break;   // tecla com o ícone do programa
                 default: r = "!comando desconhecido: " + cmd; break;
             }
-            Botao(cmd, r);
+            Enviar(new { tipo = "botao", cmd, texto = r, origem = P("origem") ?? "" });   // (0.1.20) o aviso diz se veio do celular
             return r;
         }
+
+        // (0.1.20) Ajustes › MiguelAngelus e celulares › Controle pelo celular
+        void EnviarCelular() => Enviar(new
+        {
+            tipo = "celular", ligado = Celular.Ligado, porta = Celular.Porta, codigo = Celular.Codigo, erro = Celular.Erro,
+            enderecos = Celular.Enderecos(),
+            aparelhos = Celular.Aparelhos().Select(a => new { id = a.Token, nome = a.Nome, desde = a.Desde, visto = a.Visto }).ToList()
+        });
 
         static string PastaBotoes => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MiguelAngelus Cast - botões");
 
@@ -1684,6 +1697,9 @@ namespace MiguelAngelusCast
                     });
                     break;
                 case "botoesPedir": EnviarBotoes(null); break;
+                case "celPedir": EnviarCelular(); break;                                 // (0.1.20)
+                case "celLigar": Celular.Ligar(Sim("on")); break;
+                case "celTirar": Celular.Tirar(Txt("id")); break;
                 case "botoesTestar": Botao(Txt("cmd") ?? "teste", new System.Collections.Generic.Dictionary<string, string>()); break;
                 case "botoesCriar":
                     try

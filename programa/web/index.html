@@ -706,6 +706,12 @@
           <div id="miProximas" style="margin-top:4px"></div>
           <p class="dica" style="margin:8px 0 0">Ligado, a data e a hora da capa e o "Próxima Missa" do encerramento vêm daqui (o resto da capa continua seu). O MiguelAngelus precisa estar aberto com o <b>Controle pelo celular</b> ligado.</p>
         </div>
+        <div class="pn" style="margin-top:12px" id="celPn">
+          <div class="rot"><span>📱 Controle pelo celular</span></div>
+          <div class="ck">Deixar celulares controlarem o Cast<span class="r"><button class="peq" id="celLigar">Desligado</button></span></div>
+          <p class="dica" style="margin:4px 0 0">No celular, no mesmo Wi-Fi deste computador: <b>◀ Anterior</b> e <b>Próximo ▶</b> preparam o momento do roteiro no Preview, e <b>Pôr no ar</b> faz a transição. Pareamento só do Cast (não é o do MiguelAngelus). Na primeira vez, o Windows pode perguntar se libera o Cast na rede: clique em <b>Permitir</b>.</p>
+          <div id="celPainel" style="margin-top:8px"></div>
+        </div>
         <div class="pn" style="margin-top:12px">
           <div class="rot"><span>O que vem do MiguelAngelus</span></div>
           <div class="ck">Faixa de letras (NDI)<span class="r">já funciona: crie uma cena com a imagem NDI "MiguelAngelus Letras"</span></div>
@@ -713,7 +719,7 @@
           <div class="ck">Roteiro do dia e momentos<span class="r">na integração</span></div>
           <div class="ck">Pix, nome e brasão da paróquia<span class="r">na integração · por enquanto, na Capa da live</span></div>
           <div class="ck">Câmeras PTZ e posições<span class="r">na integração · por enquanto, em Ajustes › Câmeras</span></div>
-          <div class="ck">Celulares (os mesmos pareados no MiguelAngelus)<span class="r">na integração</span></div>
+          <div class="ck">Celulares<span class="r">pareamento próprio do Cast (acima)</span></div>
         </div>
       </div>
       <div data-sec="backup" hidden>
@@ -915,6 +921,8 @@
   <script src="joystick.js"></script>
   <script src="camadas.js"></script>
   <script src="botoes.js"></script>
+  <script src="lib/qrcode/qrcode.min.js"></script>
+  <script src="celular.js"></script>
   <script src="somcena.js"></script>
   <script src="camcena.js"></script>
   <script src="cortes.js"></script>

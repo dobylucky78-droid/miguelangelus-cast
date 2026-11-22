@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1420">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cast">
+<title>MiguelAngelus Cast</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icone-192.png">
+<style>
+  :root { --bg: #0f1420; --painel: #18202f; --painel2: #222c3f; --borda: #2f3a50; --texto: #eef1f6; --sutil: #9aa6ba;
+    --ac: #d4a93a; --vivo: #e0463c; --ok: #3fb950; --prev: #3fb950; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--texto); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  body { display: flex; flex-direction: column; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  button { font: inherit; color: inherit; background: var(--painel2); border: 1px solid var(--borda); border-radius: 14px; padding: 14px 10px; touch-action: manipulation; }
+  button:active { transform: scale(.97); filter: brightness(1.2); }
+  button:disabled { opacity: .4; }
+  input { font: inherit; color: var(--texto); background: var(--painel2); border: 1px solid var(--borda); border-radius: 10px; padding: 12px; width: 100%; -webkit-user-select: text; user-select: text; }
+  [hidden] { display: none !important; }
+  .topo { display: flex; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px; background: var(--painel); border-bottom: 1px solid var(--borda); }
+  .pt { width: 10px; height: 10px; border-radius: 50%; background: var(--sutil); flex: none; } .pt.on { background: var(--ok); }
+  .topo .nome { flex: 1; font-weight: 700; } .topo .nome b { color: var(--ac); }
+  .selo { font-size: 12px; padding: 3px 9px; border-radius: 20px; background: var(--painel2); color: var(--sutil); white-space: nowrap; font-weight: 600; }
+  .selo.vivo { background: var(--vivo); color: #fff; } .selo.grav { background: #8a1c1c; color: #fff; }
+  .faixa { background: #7a5b00; color: #fff; text-align: center; font-size: 14px; padding: 6px; }
+  main { flex: 1; overflow-y: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 12px; }
+  .cx { background: var(--painel); border: 1px solid var(--borda); border-radius: 14px; padding: 10px 14px 12px; }
+  .cx .r { font-size: 12px; color: var(--sutil); text-transform: uppercase; letter-spacing: .06em; }
+  .cx .v { font-size: 22px; font-weight: 700; margin-top: 2px; word-break: break-word; }
+  .cx.ar { border: 2px solid var(--vivo); } .cx.ar .r { color: #ff8a80; }
+  .cx.pv { border: 2px solid var(--prev); } .cx.pv .r { color: #7ee08a; }
+  .mom { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--sutil); }
+  .mom b { color: var(--texto); }
+  .nav { padding: 8px 14px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 10px; background: var(--bg); }
+  .setas { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; }
+  .setas button { padding: 20px 8px; font-size: 18px; font-weight: 600; }
+  .setas .prox { background: var(--painel2); border-color: var(--prev); color: #c8f5ce; }
+  .setas small { display: block; font-size: 12px; font-weight: 400; color: var(--sutil); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #btAr { background: var(--vivo); border-color: var(--vivo); color: #fff; font-size: 22px; font-weight: 800; padding: 22px 10px; letter-spacing: .02em; }
+  .tela-cheia { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; gap: 14px; z-index: 10; }
+  .tela-cheia h1 { margin: 0; font-size: 24px; } .tela-cheia h1 b { color: var(--ac); }
+  .tela-cheia .campo { width: 100%; max-width: 320px; text-align: left; }
+  .tela-cheia label { font-size: 13px; color: var(--sutil); display: block; margin-bottom: 4px; }
+  .codigo { font: 700 34px/1 Consolas, monospace !important; letter-spacing: 10px; text-align: center; }
+  .acao { background: var(--ac) !important; color: #1b1503 !important; border: 0 !important; font-weight: 700; width: 100%; max-width: 320px; font-size: 17px; }
+  .erro { color: #ff8a80; min-height: 1.3em; font-size: 14px; }
+  .sutil { color: var(--sutil); font-size: 13px; }
+  .toast { position: fixed; left: 50%; bottom: 230px; transform: translateX(-50%); background: #333e; color: #fff; padding: 9px 16px; border-radius: 20px; font-size: 14px; z-index: 20; pointer-events: none; transition: opacity .3s; max-width: 90%; text-align: center; }
+  @media (min-width: 700px) { main, .nav { max-width: 640px; width: 100%; margin: 0 auto; } }
+</style>
+</head>
+<body>
+
+<div id="par" class="tela-cheia" hidden>
+  <img src="/icone.svg" alt="" style="width:96px;height:96px">
+  <h1><b>Miguel</b>Angelus Cast</h1>
+  <div class="sutil">Controle pelo celular</div>
+  <div class="campo"><label for="parCod">Código que aparece no Cast</label>
+    <input id="parCod" class="codigo" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000"></div>
+  <div class="campo"><label for="parNome">Nome deste celular</label>
+    <input id="parNome" maxlength="40" placeholder="Celular da transmissão"></div>
+  <button id="parOk" class="acao">Conectar</button>
+  <div id="parErro" class="erro"></div>
+  <div class="sutil">No Cast: Ajustes › MiguelAngelus e celulares › 📱 Controle pelo celular</div>
+</div>
+
+<div class="topo">
+  <span id="pt" class="pt"></span>
+  <img src="/icone.svg" alt="" style="width:30px;height:30px;border-radius:7px">
+  <span class="nome"><b>Miguel</b>Angelus Cast</span>
+  <span id="seloGrav" class="selo grav" hidden>⏺ REC</span>
+  <span id="seloVivo" class="selo">fora do ar</span>
+</div>
+<div id="faixa" class="faixa" hidden>Reconectando…</div>
+
+<main>
+  <div class="cx ar"><div class="r">No ar (Programa)</div><div class="v" id="vPrograma">—</div></div>
+  <div class="cx pv"><div class="r">Preparado (Preview)</div><div class="v" id="vPreview">—</div></div>
+  <div class="cx">
+    <div class="r">Roteiro</div>
+    <div class="v" id="vMomento" style="font-size:19px">—</div>
+    <div class="mom"><span>Depois: <b id="vDepois">—</b></span><span id="vN"></span></div>
+  </div>
+</main>
+
+<div class="nav">
+  <div class="setas">
+    <button data-cmd="anterior">◀ Anterior</button>
+    <button data-cmd="proximo" class="prox">Próximo momento ▶<small id="sProx"></small></button>
+  </div>
+  <button id="btAr" data-cmd="transicao">● PÔR NO AR</button>
+</div>
+
+<div id="toast" class="toast" style="opacity:0"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const CHAVE = 'cast.celular.token';
+let token = ''; try { token = localStorage.getItem(CHAVE) || ''; } catch (_) {}
+let est = null, ultimoOk = 0, relogio = 0, tt = 0;
+
+function toast(t) { const e = $('#toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(tt); tt = setTimeout(() => e.style.opacity = 0, 2200); }
+function vibrar() { try { navigator.vibrate && navigator.vibrate(15); } catch (_) {} }
+function nomePadrao() {
+  const u = navigator.userAgent;
+  if (/iPhone/i.test(u)) return 'iPhone'; if (/iPad/i.test(u)) return 'iPad';
+  const m = /Android[^;]*;\s*([^;)]+?)(?:\s+Build|\))/.exec(u);
+  return m ? m[1].trim().slice(0, 40) : 'Celular';
+}
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
+
+function conectado(sim) { $('#pt').classList.toggle('on', sim); $('#faixa').hidden = sim; }
+
+function render() {
+  const c = est; if (!c) return;
+  const cena = id => ((c.cenas || []).find(x => x.id === id) || {}).nome || (id ? id : '—');
+  $('#vPrograma').textContent = cena(c.programa);
+  $('#vPreview').textContent = c.preview && c.preview !== c.programa ? cena(c.preview) : '— (o mesmo do ar)';
+  const m = c.momento || {};
+  $('#vMomento').textContent = m.agora || (m.total ? 'Roteiro ainda não começou' : 'Sem roteiro');
+  $('#vDepois').textContent = m.proximo || '—';
+  $('#vN').textContent = m.total ? `${m.n}/${m.total}` : '';
+  $('#sProx').textContent = m.proximo || '';
+  $('#btAr').disabled = !c.preview || c.preview === c.programa;
+  const v = $('#seloVivo');
+  v.textContent = c.aoVivo ? '● AO VIVO ' + fmt(c.tempoAr) : 'fora do ar';
+  v.classList.toggle('vivo', !!c.aoVivo);
+  $('#seloGrav').hidden = !c.gravando;
+  if (c.gravando) $('#seloGrav').textContent = '⏺ ' + fmt(c.tempoGrav);
+}
+
+async function atualizar() {
+  clearTimeout(relogio);
+  if (!token) return mostrarPareamento();
+  try {
+    const r = await fetch('/api/estado?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    if (r.status === 401) { esquecer(); return mostrarPareamento('Este celular foi tirado no Cast. Pareie de novo.'); }
+    const j = await r.json();
+    if (j.cast) { est = j.cast; render(); }
+    ultimoOk = Date.now(); conectado(true);
+  } catch (_) { conectado(false); }
+  relogio = setTimeout(atualizar, document.visibilityState === 'visible' ? 1000 : 5000);
+}
+
+async function cmd(c) {
+  vibrar();
+  try {
+    const r = await fetch('/api/cmd?t=' + encodeURIComponent(token), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: c }) });
+    if (r.status === 401) { esquecer(); return mostrarPareamento('Este celular foi tirado no Cast. Pareie de novo.'); }
+    const j = await r.json();
+    if (!j.ok) toast(j.msg || 'Não deu');
+  } catch (_) { toast('Sem conexão — o comando não chegou'); }
+  atualizar();
+}
+
+function esquecer() { token = ''; try { localStorage.removeItem(CHAVE); } catch (_) {} }
+function mostrarPareamento(msg) {
+  $('#par').hidden = false;
+  $('#parErro').textContent = msg || '';
+  if (!$('#parNome').value) $('#parNome').value = nomePadrao();
+  const c = new URLSearchParams(location.search).get('c');
+  if (c && !$('#parCod').value) $('#parCod').value = c;
+}
+async function parear() {
+  const codigo = $('#parCod').value.replace(/\D/g, ''), nome = $('#parNome').value.trim() || nomePadrao();
+  if (codigo.length !== 4) { $('#parErro').textContent = 'Digite os 4 números do código.'; return; }
+  $('#parOk').disabled = true;
+  try {
+    const r = await fetch('/api/parear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo, nome }) });
+    const j = await r.json();
+    if (r.status === 429) { $('#parErro').textContent = 'Muitas tentativas erradas. Espere 1 minuto e use o código novo que aparece no Cast.'; return; }
+    if (!j.ok) { $('#parErro').textContent = 'Código errado ou vencido. Confira o código que aparece agora no Cast.'; return; }
+    token = j.token;
+    try { localStorage.setItem(CHAVE, token); } catch (_) {}
+    history.replaceState(null, '', '/');
+    $('#par').hidden = true;
+    atualizar();
+  } catch (_) { $('#parErro').textContent = 'Não consegui falar com o computador. Confira o Wi-Fi.'; }
+  finally { $('#parOk').disabled = false; }
+}
+
+// tela acesa (só com HTTPS ou navegador que deixa; sem isso, a tela apaga como de costume)
+async function manterAcesa() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch (_) {} }
+
+document.addEventListener('click', e => { const b = e.target.closest('button[data-cmd]'); if (b && !b.disabled) cmd(b.dataset.cmd); manterAcesa(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { manterAcesa(); atualizar(); } });
+setInterval(() => { if (token && Date.now() - ultimoOk > 4000) conectado(false); }, 2000);
+$('#parOk').addEventListener('click', parear);
+$('#parCod').addEventListener('keydown', e => { if (e.key === 'Enter') parear(); });
+if (token) atualizar(); else mostrarPareamento();
+manterAcesa();
+</script>
+</body>
+</html>
