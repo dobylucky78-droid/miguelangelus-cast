@@ -20,7 +20,7 @@ namespace MiguelAngelusCast
         readonly Mesa mesa = new Mesa();
         readonly Transmissor saida = new Transmissor();
         readonly Som som = new Som();
-        readonly MesaUi mesaSom = new MesaUi();
+        readonly MesaUi mesaSom = new MesaUi(); AuxLive auxLive; SnapshotsMesa snapMesa;
         volatile bool somCfgPendente;
         readonly Timer relogioSom = new Timer { Interval = 100 };
         CoreWebView2SharedBuffer monitores;
@@ -46,7 +46,7 @@ namespace MiguelAngelusCast
             {
                 if ((saida.AoVivo || saida.Gravando) && MessageBox.Show(this, (saida.AoVivo ? "A transmissão está no ar" : "A gravação está ligada") + ".\n\nEncerrar e fechar o Cast?", "MiguelAngelus Cast", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 { e.Cancel = true; return; }
-                Controle.Parar(); Celular.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose();
+                Controle.Parar(); Celular.Parar(); relogio.Stop(); relogioSom.Stop(); relogioRastreio.Stop(); joystick?.Dispose(); try { rastreio?.Dispose(); } catch { } saida.Dispose(); auxLive?.Dispose(); snapMesa?.Dispose(); som.Dispose(); mesaSom.Dispose(); mesa.Dispose();
                 // (0.1.12) leva para a nuvem o que mudou nesta sessão (até 8 s; sem internet, vai na próxima vez)
                 if (Nuvem.Ligada) try { System.Threading.Tasks.Task.Run(() => Nuvem.Sincronizar(false)).Wait(8000); } catch { }
                 Registro.Info("fechou");
@@ -82,11 +82,17 @@ namespace MiguelAngelusCast
                 saida.Som = som; som.Aplicar();
                 mesaSom.Mudou += () => { if (somCfgPendente) return; somCfgPendente = true; Na(() => { somCfgPendente = false; EnviarSomCfg(false); }); };
                 mesaSom.Conectar(som.Cfg.MesaIp);
+                auxLive = new AuxLive(som, mesaSom, AuxSugerida);
+                auxLive.Mudou += () => Na(() => EnviarSomCfg(false));
+                snapMesa = new SnapshotsMesa(som, mesaSom, () => saida.AoVivo);
                 relogioSom.Tick += (s, e) =>
                 {
                     var (pe, pd, re, rd) = som.Nivel();
                     Enviar(new { tipo = "nivel", pe = Math.Round(pe, 1), pd = Math.Round(pd, 1), re = Math.Round(re, 1), rd = Math.Round(rd, 1), mudo = som.Mudo, estado = som.Estado, nome = NomeSom(), avisoMesa = AvisoMesa(),
-                        niv = som.Cfg.Nivelar, nivGanho = Math.Round(som.Nivel2.GanhoDb, 1), lufs = Math.Round(som.Nivel2.LufsSaida, 1), lim = Math.Round(som.Nivel2.ReducaoLimitadorDb, 1), atraso = som.Cfg.AtrasoMs, abaixado = som.Abaixado, cenaSom = som.SomDaCena, cenaMuda = som.CenaMuda });
+                        niv = som.Cfg.Nivelar, nivGanho = Math.Round(som.Nivel2.GanhoDb, 1), lufs = Math.Round(som.Nivel2.LufsSaida, 1), lim = Math.Round(som.Nivel2.ReducaoLimitadorDb, 1), atraso = som.Cfg.AtrasoMs, abaixado = som.Abaixado, cenaSom = som.SomDaCena, cenaMuda = som.CenaMuda,
+                        auxLive = auxLive?.Situacao ?? "", auxLiveAcao = auxLive?.UltimaAcao ?? "", auxLiveModo = som.Cfg.AuxLiveModo, auxLiveTravado = auxLive?.Travado ?? false,
+                        acab = som.Cfg.Acabamento, acabG = Math.Round(som.Acab.EqGraveDb, 1), acabE = Math.Round(som.Acab.EqEmboladoDb, 1), acabA = Math.Round(som.Acab.EqAgudoDb, 1), acabComp = Math.Round(som.Acab.ReducaoCompDb, 1),
+                        mistura = auxLive?.Mistura.Situacao ?? "", misturaAcao = auxLive?.Mistura.UltimaAcao ?? "", misturaModo = som.Cfg.AuxMisturaModo, avisoSnap = snapMesa?.Aviso, auxAlimenta = auxLive?.AlimentaOutras, auxBloqueio = auxLive?.Bloqueio });
                 };
                 relogioSom.Start();
                 saida.Mudou += () => Na(() => Enviar(saida.Estado()));
@@ -490,10 +496,17 @@ namespace MiguelAngelusCast
             {
                 tipo = "somCfg", dispositivos = dispositivosSom, perfis = Perfis.Lista,
                 dispositivo = som.Cfg.Dispositivo, canais = som.Cfg.Canais, ganho = som.Cfg.GanhoDb, perfil = som.Cfg.Perfil,
-                nivelar = som.Cfg.Nivelar, alvo = som.Cfg.AlvoLufs, atraso = som.Cfg.AtrasoMs,
+                nivelar = som.Cfg.Nivelar, alvo = som.Cfg.AlvoLufs, acabamento = som.Cfg.Acabamento, acabGraves = som.Cfg.AcabGraves, acabEq = som.Cfg.AcabEq, acabComp = som.Cfg.AcabComp, atraso = som.Cfg.AtrasoMs,
                 abaixar = som.Cfg.AbaixarComVideo, abaixarDb = som.Cfg.AbaixarDb, volumeVideo = som.Cfg.VolumeVideoDb,
                 canaisEntrada = som.CanaisDispositivo,
                 rotulos = Enumerable.Range(1, 64).Select(n => Perfis.Rotulo(som.Cfg.Perfil, n + DeslocSom(), mesaSom)),
+                auxLiveModo = som.Cfg.AuxLiveModo, auxLive = som.Cfg.AuxLive, auxLiveSugerida = AuxSugerida(), auxLiveAlvo = som.Cfg.AuxLiveAlvoDb, auxLiveLimite = som.Cfg.AuxLiveLimiteDb,
+                misturaModo = som.Cfg.AuxMisturaModo, misturaFala = som.Cfg.MisturaAbaixarFala, misturaFalaDb = som.Cfg.MisturaAbaixarDb, misturaLimiar = som.Cfg.MisturaLimiarFala,
+                misturaEquilibrio = som.Cfg.MisturaEquilibrio, misturaVozes = som.Cfg.MisturaVozesAcimaDb, misturaLembrar = som.Cfg.MisturaLembrar,
+                canaisMesa = mesaSom.Conectada ? Enumerable.Range(1, mesaSom.QuantosCanais).Select(n => new { n, nome = mesaSom.NomeCanal(n) ?? "", papel = auxLive?.Mistura.Papel(n) ?? "", envio = mesaSom.Envio(n, auxLive?.Aux ?? 0) is double ev && ev > 0.001 }).ToArray() : null,
+                auxBloqueio = auxLive?.Bloqueio, auxAlimenta = auxLive?.AlimentaOutras, travarMatrizes = som.Cfg.TravarSeAlimentaOutras, avisoSnapshot = som.Cfg.AvisoSnapshot, snapAgora = snapMesa?.DescricaoAgora ?? "",
+                snapshots = snapMesa?.Lista.Select(kv => new { chave = kv.Key, descricao = kv.Value.Descricao, cena = kv.Value.Cena }).OrderBy(x => x.chave).ToArray(),
+                mesaPodeControlar = mesaSom.PodeControlar, auxesMesa = mesaSom.Conectada ? Enumerable.Range(1, mesaSom.QuantasAux).Select(a => new { n = a, nome = mesaSom.NomeAux(a) ?? "", matrix = mesaSom.AuxComoMatrix(a) }).ToArray() : null,
                 mesaIp = som.Cfg.MesaIp, mesaEstado = mesaSom.Estado, mesaModelo = mesaSom.Conectada ? (mesaSom.Modelo + " " + mesaSom.Firmware).Trim() + (mesaSom.Cena != "" ? " · cena: " + mesaSom.Cena : "") : "",
                 estado = som.Estado
             });
@@ -502,6 +515,7 @@ namespace MiguelAngelusCast
         // a aux da transmissão está muda ou com o fader no mínimo na mesa?
         string AvisoMesa()
         {
+            if (auxLive?.Bloqueio != null && (som.Cfg.AuxMisturaModo != "desligado" || som.Cfg.AuxLiveModo != "desligado")) return auxLive.Bloqueio;   // (0.1.22) mesmo sem entrada de som
             if (string.IsNullOrEmpty(som.Cfg.Dispositivo)) return null;
             foreach (var n in som.Cfg.Canais)
             {
@@ -509,6 +523,10 @@ namespace MiguelAngelusCast
                 var a = aux > 0 ? mesaSom.AvisoAux(aux) : null;
                 if (a != null) return a;
             }
+            // (0.1.22) o volume automático da aux da live cuida de estouro e de som baixo; só avisa quando chega no limite dele
+            if (auxLive?.Aviso != null) return auxLive.Aviso;
+            if (auxLive?.Bloqueio != null && som.Cfg.AuxMisturaModo != "desligado") return auxLive.Bloqueio;
+            if (som.Cfg.AuxLiveModo == "automatico" && mesaSom.PodeControlar && auxLive != null && !auxLive.Travado) return null;
             // (0.1.18) o nivelador no máximo por mais de 1,5 min de som: a mesa manda baixo demais
             if (som.Cfg.Nivelar && som.Nivel2.SomBaixo)
                 return $"o som está chegando baixo da mesa (o nivelador está no máximo, +{som.Nivel2.MaxSubirDb:0} dB): suba o volume da saída (Aux) que vai para este computador";
@@ -518,6 +536,16 @@ namespace MiguelAngelusCast
             if (som.Cfg.Nivelar && som.Nivel2.GanhoAlto)
                 return $"o nivelador está subindo muito o som (+{som.Nivel2.GanhoDb:0} dB), o que realça eco e chiado: suba um pouco a saída (Aux) na mesa ou deixe o Ganho em 0 dB";
             return null;
+        }
+        // (0.1.22) qual aux é a da live: nome tipo LIVE/TRANSMISSÃO/STREAM entre as que saem no USB escolhido; depois entre todas; depois a 1ª do USB
+        int AuxSugerida()
+        {
+            static bool NomeDeLive(string n) => !string.IsNullOrWhiteSpace(n) && System.Text.RegularExpressions.Regex.IsMatch(n, @"(?i)live|transmiss|stream|youtube|\blive\b");
+            var doUsb = new System.Collections.Generic.List<int>();
+            try { foreach (var n in som.Cfg.Canais) { int a = Perfis.AuxDaUsb(som.Cfg.Perfil, n + DeslocSom()); if (a > 0 && !doUsb.Contains(a)) doUsb.Add(a); } } catch { }
+            foreach (var a in doUsb) if (NomeDeLive(mesaSom.NomeAux(a))) return a;
+            if (mesaSom.Conectada) for (int a = 1; a <= mesaSom.QuantasAux; a++) if (NomeDeLive(mesaSom.NomeAux(a))) return a;
+            return doUsb.Count > 0 ? doUsb[0] : 0;
         }
         string NomeSom()
         {
@@ -1444,18 +1472,43 @@ namespace MiguelAngelusCast
                         if (m.TryGetProperty("ganho", out var g) && g.ValueKind == JsonValueKind.Number) som.Cfg.GanhoDb = Math.Clamp(g.GetDouble(), -30, 30);
                         if (Txt("perfil") != null) som.Cfg.Perfil = Txt("perfil");
                         if (Txt("mesaIp") != null) { som.Cfg.MesaIp = Txt("mesaIp").Trim(); mesaSom.Conectar(som.Cfg.MesaIp); }
-                        som.Salvar();
+                        if (Txt("auxLiveModo") is string alm && (alm == "desligado" || alm == "simular" || alm == "automatico")) som.Cfg.AuxLiveModo = alm;
+                        if (m.TryGetProperty("auxLive", out var alx) && alx.ValueKind == JsonValueKind.Number) som.Cfg.AuxLive = Math.Clamp(alx.GetInt32(), 0, 10);
+                        if (m.TryGetProperty("auxLiveAlvo", out var ala) && ala.ValueKind == JsonValueKind.Number) som.Cfg.AuxLiveAlvoDb = Math.Clamp(ala.GetDouble(), -24, -6);
+                        if (m.TryGetProperty("travarMatrizes", out var tmz) && (tmz.ValueKind == JsonValueKind.True || tmz.ValueKind == JsonValueKind.False)) som.Cfg.TravarSeAlimentaOutras = tmz.GetBoolean();
+                        if (m.TryGetProperty("avisoSnapshot", out var asn) && (asn.ValueKind == JsonValueKind.True || asn.ValueKind == JsonValueKind.False)) som.Cfg.AvisoSnapshot = asn.GetBoolean();
+                        if (Txt("misturaModo") is string mm && (mm == "desligado" || mm == "simular" || mm == "automatico")) som.Cfg.AuxMisturaModo = mm;
+                        if (m.TryGetProperty("misturaFala", out var mf) && (mf.ValueKind == JsonValueKind.True || mf.ValueKind == JsonValueKind.False)) som.Cfg.MisturaAbaixarFala = mf.GetBoolean();
+                        if (m.TryGetProperty("misturaFalaDb", out var mfd) && mfd.ValueKind == JsonValueKind.Number) som.Cfg.MisturaAbaixarDb = Math.Clamp(mfd.GetDouble(), -20, -3);
+                        if (m.TryGetProperty("misturaLimiar", out var mli) && mli.ValueKind == JsonValueKind.Number) som.Cfg.MisturaLimiarFala = Math.Clamp(mli.GetDouble(), -60, -20);
+                        if (m.TryGetProperty("misturaEquilibrio", out var meq) && (meq.ValueKind == JsonValueKind.True || meq.ValueKind == JsonValueKind.False)) som.Cfg.MisturaEquilibrio = meq.GetBoolean();
+                        if (m.TryGetProperty("misturaVozes", out var mvz) && mvz.ValueKind == JsonValueKind.Number) som.Cfg.MisturaVozesAcimaDb = Math.Clamp(mvz.GetDouble(), 0, 9);
+                        if (m.TryGetProperty("misturaLembrar", out var mlb) && (mlb.ValueKind == JsonValueKind.True || mlb.ValueKind == JsonValueKind.False)) som.Cfg.MisturaLembrar = mlb.GetBoolean();
+                        if (m.TryGetProperty("papel", out var pp) && pp.ValueKind == JsonValueKind.Object && pp.TryGetProperty("nome", out var ppn) && pp.TryGetProperty("papel", out var ppp))
+                        {
+                            var nomeCanal = (ppn.GetString() ?? "").Trim().ToUpperInvariant(); var papel = ppp.GetString() ?? "";
+                            som.Cfg.PapelCanais ??= new System.Collections.Generic.Dictionary<string, string>();
+                            if (nomeCanal != "") { if (papel is "fala" or "voz" or "instrumento" or "fora") som.Cfg.PapelCanais[nomeCanal] = papel; else som.Cfg.PapelCanais.Remove(nomeCanal); }
+                        }
+                        if (m.TryGetProperty("auxLiveLimite", out var all) && all.ValueKind == JsonValueKind.Number) som.Cfg.AuxLiveLimiteDb = Math.Clamp(all.GetDouble(), 3, 20);
                         if (m.TryGetProperty("nivelar", out var nv) && (nv.ValueKind == JsonValueKind.True || nv.ValueKind == JsonValueKind.False)) som.Cfg.Nivelar = nv.GetBoolean();
+                        foreach (var (k, set) in new (string, Action<bool>)[] { ("acabamento", v => som.Cfg.Acabamento = v), ("acabGraves", v => som.Cfg.AcabGraves = v), ("acabEq", v => som.Cfg.AcabEq = v), ("acabComp", v => som.Cfg.AcabComp = v) })
+                            if (m.TryGetProperty(k, out var bv) && (bv.ValueKind == JsonValueKind.True || bv.ValueKind == JsonValueKind.False)) set(bv.GetBoolean());
                         if (m.TryGetProperty("alvo", out var av) && av.ValueKind == JsonValueKind.Number) som.Cfg.AlvoLufs = Math.Clamp(av.GetDouble(), -30, -10);
                         if (m.TryGetProperty("atraso", out var at) && at.ValueKind == JsonValueKind.Number) som.Cfg.AtrasoMs = (int)Math.Round(at.GetDouble());
                         if (m.TryGetProperty("abaixar", out var ab) && (ab.ValueKind == JsonValueKind.True || ab.ValueKind == JsonValueKind.False)) som.Cfg.AbaixarComVideo = ab.GetBoolean();
                         if (m.TryGetProperty("abaixarDb", out var abd) && abd.ValueKind == JsonValueKind.Number) som.Cfg.AbaixarDb = Math.Clamp(abd.GetDouble(), -90, 0);
                         if (m.TryGetProperty("volumeVideo", out var vv) && vv.ValueKind == JsonValueKind.Number) som.Cfg.VolumeVideoDb = Math.Clamp(vv.GetDouble(), -30, 12);
+                        som.Salvar();   // (0.1.22) depois de tudo: antes, a última mudança do nivelador/atraso/vídeo só era gravada na seguinte
                         som.AplicarNivelador();
                         if (!Sim("soGanho")) som.Aplicar();
                         EnviarSomCfg(false);
                         break;
                     }
+                case "snapDispensar": snapMesa?.Dispensar(); break;
+                case "snapUsarAtual": snapMesa?.UsarAtual(); EnviarSomCfg(false); break;
+                case "snapEsquecer": snapMesa?.Esquecer(Txt("chave")); EnviarSomCfg(false); break;
+                case "auxLiveTravar": if (auxLive != null) { auxLive.Travado = Sim("ligado"); Registro.Info(auxLive.Travado ? "aux da live: travada pelo operador" : "aux da live: destravada"); } break;
                 case "mudo": som.Mudo = Sim("ligado"); Registro.Info(som.Mudo ? "som mudo" : "som de volta"); break;
                 case "gravar": Aviso(saida.Gravar(Sim("ligar"))); break;
                 case "transmitir": Aviso(saida.Transmitir(Sim("ligar"))); break;

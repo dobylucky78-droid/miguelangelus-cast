@@ -271,6 +271,12 @@
         <span id="somDb" class="dica db">—</span>
         <span id="somNiv" class="dica"></span>
         <span id="somAviso" class="erro" style="margin:0"></span>
+        <span id="somAuxLive" class="dica" hidden></span>
+        <span id="somMistura" class="dica" hidden></span>
+        <span id="somSnap" class="erro" style="margin:0" hidden></span>
+        <button id="btnSnapOk" class="peq" hidden title="Fecha este aviso até a próxima celebração">Deixar como está</button>
+        <button id="btnSnapUsar" class="peq" hidden title="Daqui para a frente, esta celebração usa o snapshot que está na mesa agora">📌 Esta celebração usa o atual</button>
+        <button id="btnAuxTravar" class="peq" hidden title="Trava o volume automático da aux da live: o Cast para de mexer no fader da mesa até destravar">🔒 Travar</button>
         <span id="somCena" class="dica" title="O som que a cena do ar manda para a transmissão (✎ na cena › Som desta cena)"></span>
         <button id="btnMudo" class="peq" title="Corta o som da transmissão e da gravação">Mudo</button>
       </div>
@@ -820,6 +826,59 @@
           <button id="btnSmMesa" class="peq">Conectar</button>
           <span id="smMesaEstado" class="dica"></span>
         </div>
+        <div id="smAuxLiveCx" style="margin-top:12px;padding:10px 12px;border:1px solid var(--borda,#3335);border-radius:10px" hidden>
+          <b>🎚 Volume automático da aux da live na mesa</b>
+          <p class="dica" style="margin:4px 0 10px">O Cast mexe <b>só</b> no fader da aux que vai para a transmissão, para o som chegar sem estourar e sem ficar baixo (picos perto do alvo). Não mexe em canais, nas caixas da igreja, nos retornos nem nos snapshots. Se alguém mexer nesse fader na mesa, o Cast respeita e recomeça dali.</p>
+          <div class="linha">
+            <label class="c2">Aux da live<select id="smAuxLive"></select></label>
+            <label class="c2">Modo<select id="smAuxModo">
+              <option value="desligado">Desligado</option>
+              <option value="simular">Só mostrar o que faria (não mexe)</option>
+              <option value="automatico">Automático (mexe no fader da mesa)</option>
+            </select></label>
+            <label class="c2">Pico desejado<select id="smAuxAlvo">
+              <option value="-9">−9 dBFS (mais quente)</option>
+              <option value="-12">−12 dBFS (recomendado)</option>
+              <option value="-15">−15 dBFS (mais folga)</option>
+            </select></label>
+            <label class="c2">Pode mexer até<select id="smAuxLimite">
+              <option value="6">±6 dB</option>
+              <option value="10">±10 dB (recomendado)</option>
+              <option value="15">±15 dB</option>
+            </select></label>
+          </div>
+          <p id="smAuxSit" class="dica" style="margin:8px 0 0"></p>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:8px" title="Desligado de fábrica. Ligado: se, no snapshot carregado, a aux da live também for para outras saídas (matrizes das caixas, altar…), o Cast não mexe nela nem nos envios para ela"><input type="checkbox" id="smTravarMtz"> Não mexer se a aux da live também for para outras saídas (matrizes)</label>
+          <p id="smAuxInfo" class="dica" style="margin:4px 0 0" hidden></p>
+          <p id="smAuxBloq" class="erro" style="margin:8px 0 0" hidden></p>
+          <hr style="border:0;border-top:1px solid var(--borda,#3335);margin:12px 0">
+          <b>🎛 Mistura canal a canal na aux da live</b>
+          <p class="dica" style="margin:4px 0 10px">Mexe só no <b>envio</b> de cada canal para a aux da live (nunca no fader do canal, nas caixas ou nos retornos): as vozes ficam acima dos instrumentos e, se ligado, os instrumentos abaixam quando alguém fala sem nenhum cantor cantando (as vozes nunca abaixam: o padre canta junto). Ao travar, desligar ou fechar o Cast, os envios voltam como estavam.</p>
+          <div class="linha">
+            <label class="c2">Modo<select id="smMixModo">
+              <option value="desligado">Desligado</option>
+              <option value="simular">Só mostrar o que faria (não mexe)</option>
+              <option value="automatico">Automático (mexe nos envios para a aux da live)</option>
+            </select></label>
+            <label style="display:flex;align-items:center;gap:6px;align-self:end;padding-bottom:10px" title="Desligado de fábrica. Só os instrumentos descem, e só quando o padre (ou outro canal de fala) fala e ninguém do ministério está cantando: avisos ou oração com fundo instrumental"><input type="checkbox" id="smMixFala"> instrumentos abaixam quando alguém fala sozinho</label>
+            <label class="c2">Quanto abaixa<select id="smMixFalaDb"><option value="-4">−4 dB (pouco)</option><option value="-8">−8 dB (recomendado)</option><option value="-12">−12 dB (bastante)</option></select></label>
+            <label class="c2" title="Nível do canal de fala (antes do fader) a partir do qual o Cast entende que alguém está falando">Sensibilidade<select id="smMixLimiar"><option value="-48">alta (−48 dBFS)</option><option value="-42">normal (−42 dBFS)</option><option value="-36">baixa (−36 dBFS)</option></select></label>
+          </div>
+          <div class="linha" style="margin-top:8px">
+            <label style="display:flex;align-items:center;gap:6px;align-self:end;padding-bottom:10px"><input type="checkbox" id="smMixEq"> vozes acima dos instrumentos</label>
+            <label class="c2">Vozes acima<select id="smMixVozes"><option value="0">0 dB (iguais)</option><option value="3">3 dB (recomendado)</option><option value="6">6 dB</option></select></label>
+            <label style="display:flex;align-items:center;gap:6px;align-self:end;padding-bottom:10px"><input type="checkbox" id="smMixLembrar"> lembrar o ajuste de cada ministério</label>
+          </div>
+          <details style="margin-top:8px"><summary class="dica" style="cursor:pointer">Papel de cada canal (pelo nome na mesa)</summary>
+            <div id="smMixCanais" class="linha" style="margin-top:8px;gap:6px 14px"></div>
+          </details>
+          <p id="smMixSit" class="dica" style="margin:8px 0 0"></p>
+          <hr style="border:0;border-top:1px solid var(--borda,#3335);margin:12px 0">
+          <b>🗂 Snapshot da mesa por celebração</b>
+          <p class="dica" style="margin:4px 0 8px">Só avisa, nunca carrega (carregar troca a mesa inteira, inclusive os retornos). O Cast aprende sozinho: com a transmissão no ar há 15 min, guarda o snapshot da mesa para aquela celebração (dia, hora e igreja da agenda do MiguelAngelus). Da próxima vez, se a mesa estiver em outro, avisa no Ao vivo.</p>
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="smSnapAviso"> Avisar quando a mesa estiver em outro snapshot</label>
+          <div id="smSnapLista" style="margin-top:8px"></div>
+        </div>
         <div class="linha" style="margin-top:12px">
           <label class="c2" style="flex:0 1 320px">Ganho <b id="smGanhoTxt">0 dB</b><input id="smGanho" type="range" min="-30" max="30" step="1" value="0"></label>
           <div class="medidor grande-m"><div class="vu"><i id="vuE2"></i><s id="pkE2"></s></div><div class="vu"><i id="vuD2"></i><s id="pkD2"></s></div></div>
@@ -834,6 +893,12 @@
             <option value="-23">−23 LUFS (padrão de TV)</option>
           </select></label>
           <span id="smNiv" class="dica"></span>
+        </div>
+        <div class="linha" style="margin-top:12px">
+          <label style="display:flex;align-items:center;gap:8px;align-self:end;padding-bottom:10px" title="Antes do nivelador, dentro do Cast: não mexe na mesa"><input type="checkbox" id="smAcab"> Acabamento do som</label>
+          <label style="display:flex;align-items:center;gap:6px;align-self:end;padding-bottom:10px" title="Passa-altas de 80 Hz: tira vento, pancada no púlpito, ronco e o 'pum' do microfone"><input type="checkbox" id="smAcabG"> cortar graves (80 Hz)</label>
+          <label style="display:flex;align-items:center;gap:6px;align-self:end;padding-bottom:10px" title="Mede, com som de verdade, o equilíbrio de grave, 'embolado' e agudo numa média de ~30 s e corrige devagar (0,1 dB/s) só o que sair da faixa normal; no máximo ±4 dB"><input type="checkbox" id="smAcabEq"> equalização automática lenta</label>
+          <label style="display:flex;align-items:center;gap:6px;align-self:end;padding-bottom:10px" title="Compressor suave (2,5:1) que só segura os picos: a palavra mais forte, o padre chegando perto do microfone"><input type="checkbox" id="smAcabComp"> compressor de voz</label>
         </div>
         <div class="linha" style="margin-top:12px">
           <label class="c2" style="flex:0 1 420px">Atraso do som <b id="smAtrasoTxt">0 ms</b><input id="smAtraso" type="range" min="0" max="1000" step="10" value="0"></label>

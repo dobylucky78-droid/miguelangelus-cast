@@ -508,8 +508,19 @@ function renderNivel(m) {
   $('#somDb').textContent = txt; $('#smDb2').textContent = txt;
   $('#somNome').textContent = m.nome; $('#somNome').title = m.nome;
   $('#somAviso').textContent = m.avisoMesa ? '⚠ ' + m.avisoMesa : '';
+  // (0.1.22) volume automático da aux da live na mesa
+  const al = m.auxLiveModo && m.auxLiveModo !== 'desligado' && m.auxLive;
+  $('#somAuxLive').hidden = !al; $('#btnAuxTravar').hidden = !(m.auxLiveModo === 'automatico' || m.misturaModo === 'automatico');
+  if (al) { $('#somAuxLive').textContent = '🎚 ' + m.auxLive; $('#somAuxLive').title = m.auxLiveAcao ? 'Última mudança: ' + m.auxLiveAcao : 'Nenhuma mudança ainda'; }
+  $('#btnAuxTravar').classList.toggle('on', !!m.auxLiveTravado); $('#btnAuxTravar').textContent = m.auxLiveTravado ? '🔓 Destravar' : '🔒 Travar'; S.auxTravado = !!m.auxLiveTravado;
+  if ($('#smAuxInfo') && 'auxAlimenta' in m) { $('#smAuxInfo').hidden = !m.auxAlimenta || !!m.auxBloqueio; $('#smAuxInfo').textContent = m.auxAlimenta ? 'ℹ ' + m.auxAlimenta + ' (o Cast mexe mesmo assim: a trava está desligada).' : ''; $('#smAuxBloq').hidden = !m.auxBloqueio; $('#smAuxBloq').textContent = m.auxBloqueio ? '⛔ ' + m.auxBloqueio + '.' : ''; }
+  $('#somSnap').hidden = $('#btnSnapOk').hidden = $('#btnSnapUsar').hidden = !m.avisoSnap; if (m.avisoSnap) $('#somSnap').textContent = '🗂 ' + m.avisoSnap;
+  const mx = m.misturaModo && m.misturaModo !== 'desligado' && m.mistura;
+  $('#somMistura').hidden = !mx; if (mx) { $('#somMistura').textContent = '🎛 ' + m.mistura; $('#somMistura').title = m.misturaAcao ? 'Última: ' + m.misturaAcao : ''; }
+  if ($('#smMixSit')) $('#smMixSit').textContent = mx ? m.mistura + (m.misturaAcao ? ' · última: ' + m.misturaAcao : '') : '';
+  if ($('#smAuxSit')) $('#smAuxSit').textContent = al ? m.auxLive + (m.auxLiveAcao ? ' · última mudança: ' + m.auxLiveAcao : '') : '';
   const sg = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(0);
-  const niv = [m.lufs > -70 ? 'volume ' + fmtDb(m.lufs) + ' LUFS' : '', m.niv ? 'nivelador ' + sg(m.nivGanho) + ' dB' : 'nivelador desligado', m.lim < -0.5 ? 'limitador ' + sg(m.lim) + ' dB' : '', m.atraso > 0 ? 'atraso ' + m.atraso + ' ms' : '', m.abaixado ? '🎬 vídeo tocando: mesa abaixada' : ''].filter(Boolean).join(' · ');
+  const niv = [m.lufs > -70 ? 'volume ' + fmtDb(m.lufs) + ' LUFS' : '', m.niv ? 'nivelador ' + sg(m.nivGanho) + ' dB' : 'nivelador desligado', m.lim < -0.5 ? 'limitador ' + sg(m.lim) + ' dB' : '', m.atraso > 0 ? 'atraso ' + m.atraso + ' ms' : '', m.acab ? 'acabamento' + ((m.acabG || m.acabE || m.acabA) ? ' (eq ' + [['grave', m.acabG], ['embolado', m.acabE], ['agudo', m.acabA]].filter(x => x[1]).map(x => x[0] + ' ' + sg(x[1])).join(', ') + ')' : '') + (m.acabComp < -1 ? ' comp ' + sg(m.acabComp) + ' dB' : '') : '', m.abaixado ? '🎬 vídeo tocando: mesa abaixada' : ''].filter(Boolean).join(' · ');
   const nivTxt = m.estado === 'ok' ? niv : ''; $('#somNiv').textContent = nivTxt; $('#smNiv').textContent = nivTxt;
   $('#btnMudo').classList.toggle('on', m.mudo); $('#btnMudo').textContent = m.mudo ? 'MUDO (clique para voltar)' : 'Mudo';
   S.mudo = m.mudo;
@@ -540,15 +551,38 @@ function renderSomCfg(m) {
   $('#smRede').hidden = m.perfil !== 'ui24r';
   mostrarAtraso(m.atraso);
   $('#smAbaixar').checked = m.abaixar; $('#smAbaixarDb').value = String(m.abaixarDb); $('#smAbaixarDb').disabled = !m.abaixar; $('#smVolVideo').value = String(m.volumeVideo);
+  $('#smAcab').checked = m.acabamento; for (const [id, k] of [['#smAcabG', 'acabGraves'], ['#smAcabEq', 'acabEq'], ['#smAcabComp', 'acabComp']]) { $(id).checked = m[k]; $(id).disabled = !m.acabamento; }
   $('#smNivelar').checked = m.nivelar; $('#smAlvo').value = String(m.alvo); $('#smAlvo').disabled = !m.nivelar;
   if (document.activeElement !== $('#smMesaIp')) $('#smMesaIp').value = m.mesaIp || '';
-  $('#smMesaEstado').textContent = !m.mesaIp ? 'opcional: traz os nomes dados na mesa (só leitura, o Cast não mexe na mesa)' : m.mesaEstado === 'conectada' ? '● conectada · ' + m.mesaModelo + ' · só leitura' : m.mesaEstado;
+  const mexe = m.auxLiveModo === 'automatico';
+  $('#smMesaEstado').textContent = !m.mesaIp ? 'opcional: traz os nomes dados na mesa e permite o volume automático da aux da live' : m.mesaEstado === 'conectada' ? '● conectada · ' + m.mesaModelo + (mexe ? ' · mexe só no fader da aux da live' : ' · só leitura') : m.mesaEstado;
+  // (0.1.22) aux da live
+  $('#smAuxLiveCx').hidden = m.perfil !== 'ui24r' || !m.mesaIp;
+  const auxes = m.auxesMesa || [], sug = auxes.find(a => a.n === m.auxLiveSugerida);
+  $('#smAuxLive').innerHTML = `<option value="0">Automática${sug ? ' (agora: AUX ' + sug.n + (sug.nome ? ' · ' + esc(sug.nome) : '') + ')' : m.auxLiveSugerida ? ' (agora: AUX ' + m.auxLiveSugerida + ')' : ''}</option>` +
+    (auxes.length ? auxes : [...Array(10)].map((_, i) => ({ n: i + 1, nome: '' }))).map(a => `<option value="${a.n}">AUX ${a.n}${a.nome ? ' · ' + esc(a.nome) : ''}${a.matrix ? ' (como Matrix)' : ''}</option>`).join('');
+  $('#smAuxLive').value = String(m.auxLive || 0); $('#smAuxModo').value = m.auxLiveModo || 'desligado';
+  $('#smAuxAlvo').value = String(m.auxLiveAlvo ?? -12); $('#smAuxLimite').value = String(m.auxLiveLimite ?? 10);
+  $('#smAuxModo').disabled = !m.mesaPodeControlar && m.auxLiveModo === 'desligado';
+  $('#smTravarMtz').checked = !!m.travarMatrizes;
+  $('#smAuxInfo').hidden = !m.auxAlimenta || !!m.auxBloqueio; $('#smAuxInfo').textContent = m.auxAlimenta ? 'ℹ ' + m.auxAlimenta + ' (o Cast mexe mesmo assim: a trava está desligada).' : '';
+  $('#smAuxBloq').hidden = !m.auxBloqueio; $('#smAuxBloq').textContent = m.auxBloqueio ? '⛔ ' + m.auxBloqueio + '.' : '';
+  $('#smMixModo').value = m.misturaModo || 'desligado'; $('#smMixFala').checked = m.misturaFala; $('#smMixFalaDb').value = String(m.misturaFalaDb);
+  $('#smMixLimiar').value = String(m.misturaLimiar); $('#smMixEq').checked = m.misturaEquilibrio; $('#smMixVozes').value = String(m.misturaVozes); $('#smMixLembrar').checked = m.misturaLembrar;
+  $('#smSnapAviso').checked = m.avisoSnapshot;
+  $('#smSnapLista').innerHTML = (m.snapshots || []).length ? (m.snapshots.map(s => `<div class="linha" style="gap:8px;align-items:center"><span>${esc(s.descricao)} → <b>${esc(s.cena)}</b></span><button class="peq" data-snapesquecer="${esc(s.chave)}" title="Esquecer">✕</button></div>`).join('')) : '<span class="dica">Nenhuma celebração aprendida ainda.</span>';
+  const PAPEIS = [['fala', '🎤 fala'], ['voz', '🎵 voz'], ['instrumento', '🎸 instrumento'], ['fora', '— não mexer']];
+  $('#smMixCanais').innerHTML = (m.canaisMesa || []).filter(c => c.nome.trim()).map(c => `<label class="c2" style="flex:0 0 190px">${c.n} · ${esc(c.nome)}${c.envio ? '' : ' <span class="dica">(sem envio)</span>'}<select data-papel="${esc(c.nome)}">${PAPEIS.map(([v, r]) => `<option value="${v}"${v === c.papel ? ' selected' : ''}>${r}</option>`).join('')}</select></label>`).join('') || '<span class="dica">conecte a mesa para ver os canais</span>';
 }
 const salvarSom = extra => enviar({ tipo: 'salvarSom', dispositivo: $('#smDisp').value, canais: $('#smCanais').value.split(',').map(Number), ganho: +$('#smGanho').value, perfil: $('#smPerfil').value, ...extra });
 $('#smDisp').onchange = () => { $('#smCanais').value = '1,2'; salvarSom(); };
 $('#smCanais').onchange = $('#smPerfil').onchange = () => salvarSom();
 $('#smGanho').oninput = () => { const g = +$('#smGanho').value; $('#smGanhoTxt').textContent = (g > 0 ? '+' : '') + g + ' dB'; salvarSom({ soGanho: true }); };
 $('#smNivelar').onchange = () => salvarSom({ soGanho: true, nivelar: $('#smNivelar').checked });
+$('#smAcab').onchange = () => salvarSom({ soGanho: true, acabamento: $('#smAcab').checked });
+$('#smAcabG').onchange = () => salvarSom({ soGanho: true, acabGraves: $('#smAcabG').checked });
+$('#smAcabEq').onchange = () => salvarSom({ soGanho: true, acabEq: $('#smAcabEq').checked });
+$('#smAcabComp').onchange = () => salvarSom({ soGanho: true, acabComp: $('#smAcabComp').checked });
 $('#smAlvo').onchange = () => salvarSom({ soGanho: true, alvo: +$('#smAlvo').value });
 function mostrarAtraso(v) { $('#smAtrasoTxt').textContent = v + ' ms'; $('#smAtraso').value = Math.min(v, 1000); if (document.activeElement !== $('#smAtrasoN')) $('#smAtrasoN').value = v; }
 function mudarAtraso(v) { v = Math.max(0, Math.min(2000, Math.round(+v / 10) * 10 || 0)); mostrarAtraso(v); salvarSom({ soGanho: true, atraso: v }); }
@@ -560,6 +594,32 @@ $('#smAbaixar').onchange = () => salvarSom({ soGanho: true, abaixar: $('#smAbaix
 $('#smAbaixarDb').onchange = () => salvarSom({ soGanho: true, abaixarDb: +$('#smAbaixarDb').value });
 $('#smVolVideo').onchange = () => salvarSom({ soGanho: true, volumeVideo: +$('#smVolVideo').value });
 $('#btnSmMesa').onclick = () => salvarSom({ mesaIp: $('#smMesaIp').value });
+$('#smAuxLive').onchange = () => salvarSom({ soGanho: true, auxLive: +$('#smAuxLive').value });
+$('#smAuxModo').onchange = () => {
+  const v = $('#smAuxModo').value;
+  if (v === 'automatico' && !confirm('O Cast vai mexer no fader da aux da live na mesa (só nele), durante a transmissão, para o som não estourar nem ficar baixo.\n\nSe alguém mexer nesse fader na mesa, o Cast respeita. Para parar na hora, use 🔒 Travar no Ao vivo.\n\nLigar?')) { $('#smAuxModo').value = SOM?.auxLiveModo || 'desligado'; return; }
+  salvarSom({ soGanho: true, auxLiveModo: v });
+};
+$('#smAuxAlvo').onchange = () => salvarSom({ soGanho: true, auxLiveAlvo: +$('#smAuxAlvo').value });
+$('#smAuxLimite').onchange = () => salvarSom({ soGanho: true, auxLiveLimite: +$('#smAuxLimite').value });
+$('#smMixModo').onchange = () => {
+  const v = $('#smMixModo').value;
+  if (v === 'automatico' && !confirm('O Cast vai mexer nos ENVIOS dos canais para a aux da live (só para ela), durante a transmissão: equilibrar vozes e instrumentos (e, se ligado, abaixar os instrumentos quando alguém fala sem cantor). As vozes nunca são mexidas.\n\nNada muda nas caixas da igreja nem nos retornos. Ao travar, desligar ou fechar o Cast, os envios voltam como estavam.\n\nLigar?')) { $('#smMixModo').value = SOM?.misturaModo || 'desligado'; return; }
+  salvarSom({ soGanho: true, misturaModo: v });
+};
+$('#smMixFala').onchange = () => salvarSom({ soGanho: true, misturaFala: $('#smMixFala').checked });
+$('#smMixFalaDb').onchange = () => salvarSom({ soGanho: true, misturaFalaDb: +$('#smMixFalaDb').value });
+$('#smMixLimiar').onchange = () => salvarSom({ soGanho: true, misturaLimiar: +$('#smMixLimiar').value });
+$('#smMixEq').onchange = () => salvarSom({ soGanho: true, misturaEquilibrio: $('#smMixEq').checked });
+$('#smMixVozes').onchange = () => salvarSom({ soGanho: true, misturaVozes: +$('#smMixVozes').value });
+$('#smMixLembrar').onchange = () => salvarSom({ soGanho: true, misturaLembrar: $('#smMixLembrar').checked });
+$('#smMixCanais').addEventListener('change', e => { const s = e.target.closest('select[data-papel]'); if (s) salvarSom({ soGanho: true, papel: { nome: s.dataset.papel, papel: s.value } }); });
+$('#smTravarMtz').onchange = () => salvarSom({ soGanho: true, travarMatrizes: $('#smTravarMtz').checked });
+$('#smSnapAviso').onchange = () => salvarSom({ soGanho: true, avisoSnapshot: $('#smSnapAviso').checked });
+$('#smSnapLista').addEventListener('click', e => { const b = e.target.closest('[data-snapesquecer]'); if (b) enviar({ tipo: 'snapEsquecer', chave: b.dataset.snapesquecer }); });
+$('#btnSnapOk').onclick = () => enviar({ tipo: 'snapDispensar' });
+$('#btnSnapUsar').onclick = () => enviar({ tipo: 'snapUsarAtual' });
+$('#btnAuxTravar').onclick = () => enviar({ tipo: 'auxLiveTravar', ligado: !S.auxTravado });
 $('#btnSmLista').onclick = () => enviar({ tipo: 'pedirSom' });
 // ---------- câmera que segue (rastreio) ----------
 const RT = { real: false };

@@ -6,7 +6,7 @@
 ;   ao desinstalar nem ao instalar uma versão nova por cima.
 
 #define Nome "MiguelAngelus Cast"
-#define Versao "0.1.21"
+#define Versao "0.1.22"
 #define Editor "Paróquia São José Operário — PASCOM"
 #define Exe "MiguelAngelusCast.exe"
 

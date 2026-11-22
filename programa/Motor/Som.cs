@@ -25,6 +25,27 @@ namespace MiguelAngelusCast.Motor
         public bool AbaixarComVideo { get; set; } = true;   // vídeo tocando com som: abaixa o som da mesa
         public double AbaixarDb { get; set; } = -20;        // quanto abaixa (−90 = some)
         public double VolumeVideoDb { get; set; } = 0;      // volume do som dos vídeos
+        // (0.1.22) volume automático da aux da live na mesa (AuxLive.cs): "desligado" | "simular" | "automatico"
+        public string AuxLiveModo { get; set; } = "desligado";
+        public int AuxLive { get; set; } = 0;               // 1-based; 0 = o Cast sugere (nome LIVE/TRANSMISSÃO ou a aux que sai no USB)
+        public double AuxLiveAlvoDb { get; set; } = -12;    // pico desejado do som que chega da mesa (dBFS)
+        public double AuxLiveLimiteDb { get; set; } = 10;
+        // (0.1.22) acabamento no Cast (Acabamento.cs): corte de graves, equalização automática lenta, compressor suave
+        public bool Acabamento { get; set; } = false;
+        public bool AcabGraves { get; set; } = true;
+        public bool AcabEq { get; set; } = true;
+        public bool AcabComp { get; set; } = true;
+        // (0.1.22) mistura canal a canal só na aux da live (AuxMistura.cs): "desligado" | "simular" | "automatico"
+        public bool TravarSeAlimentaOutras { get; set; } = false;   // (0.1.22) não mexer na aux da live se ela também for para matrizes (caixas…); desligado de fábrica
+        public bool AvisoSnapshot { get; set; } = true;     // (0.1.22) avisar quando a mesa estiver em outro snapshot do que a celebração costuma usar (SnapshotsMesa.cs)
+        public string AuxMisturaModo { get; set; } = "desligado";
+        public bool MisturaAbaixarFala { get; set; } = false;   // desligado de fábrica: o padre canta junto (só instrumentos, só sem cantor)
+        public double MisturaAbaixarDb { get; set; } = -8;
+        public double MisturaLimiarFala { get; set; } = -42;    // nível (dBFS, antes do fader) a partir do qual um canal de fala "está falando"
+        public bool MisturaEquilibrio { get; set; } = true;
+        public double MisturaVozesAcimaDb { get; set; } = 3;
+        public bool MisturaLembrar { get; set; } = true;
+        public Dictionary<string, string> PapelCanais { get; set; } = new Dictionary<string, string>();   // NOME DO CANAL → fala | voz | instrumento | fora   // quanto o automático pode mexer, para cima ou para baixo, do ponto de partida
     }
 
     public sealed class DispositivoSom
@@ -53,6 +74,7 @@ namespace MiguelAngelusCast.Motor
         NAudio.Dsp.WdlResampler conv; int taxaEntrada;
         float[] tmp = new float[0], tmpSaida = new float[0];
         public readonly Nivelador Nivel2 = new Nivelador();
+        public readonly Acabamento Acab = new Acabamento();
         readonly Atraso atraso = new Atraso();
 
         public Som()
@@ -66,6 +88,7 @@ namespace MiguelAngelusCast.Motor
         public void AplicarNivelador()
         {
             Nivel2.Ligado = Cfg.Nivelar; Nivel2.AlvoLufs = Math.Clamp(Cfg.AlvoLufs, -30, -10);
+            Acab.Ligado = Cfg.Acabamento; Acab.CortarGraves = Cfg.AcabGraves; Acab.EqAuto = Cfg.AcabEq; Acab.Comprimir = Cfg.AcabComp;
             Cfg.AtrasoMs = Math.Clamp(Cfg.AtrasoMs, 0, Atraso.MaxMs); atraso.Ms = Cfg.AtrasoMs;
         }
 
@@ -199,13 +222,16 @@ namespace MiguelAngelusCast.Motor
             int a = Math.Clamp(sel[0], 0, ch - 1), b = sel.Length > 1 ? Math.Clamp(sel[1], 0, ch - 1) : a;
             float g = (float)Math.Pow(10, Cfg.GanhoDb / 20);
             var st = new float[quadros * 2];
-            int noTeto = 0;
+            int noTeto = 0; float pBruto = 0; double sBruta = 0;
             for (int i = 0; i < quadros; i++)
             {
                 float va = src[i * ch + a], vb = src[i * ch + b];
-                if (Math.Abs(va) >= 0.985f || Math.Abs(vb) >= 0.985f) noTeto++;   // (0.1.21) chegou no máximo antes do ganho: a mesa está estourando
+                float m = Math.Max(Math.Abs(va), Math.Abs(vb));
+                if (m >= 0.985f) noTeto++;   // (0.1.21) chegou no máximo antes do ganho: a mesa está estourando
+                if (m > pBruto) pBruto = m; sBruta += (double)m * m;
                 st[i * 2] = va * g; st[i * 2 + 1] = vb * g;
             }
+            lock (travaBruta) { if (pBruto > picoBruto) picoBruto = pBruto; somaBruta += sBruta; nBruta += quadros; }
             ContarEstouro(noTeto, quadros);
 
             if (conv != null)
@@ -218,6 +244,19 @@ namespace MiguelAngelusCast.Motor
                 Depois(tmpSaida, saiu * 2);
             }
             else Depois(st, st.Length);
+        }
+
+        // (0.1.22) nível do som como chega da mesa (antes do Ganho e do nivelador), para o controle da aux da live
+        readonly object travaBruta = new object(); float picoBruto; double somaBruta; long nBruta;
+        public (double pico, double media) NivelEntrada()
+        {
+            lock (travaBruta)
+            {
+                static double Db(double v) => v <= 1e-6 ? -120 : 20 * Math.Log10(v);
+                var r = (Db(picoBruto), Db(nBruta > 0 ? Math.Sqrt(somaBruta / nBruta) : 0));
+                picoBruto = 0; somaBruta = 0; nBruta = 0;
+                return r;
+            }
         }
 
         // (0.1.21) Missa de 22/11/2026: a Aux da live estava com a luz vermelha acesa na mesa (+6,9 dB) e o som já chegava cortado.
@@ -239,9 +278,10 @@ namespace MiguelAngelusCast.Motor
         }
         public bool Estourando { get { lock (segundosEstourados) { var agora = DateTime.Now; return segundosEstourados.Count(t => (agora - t).TotalSeconds <= 30) >= 3; } } }
 
-        // já em 48 kHz: nivelador + limitador, medidor (mostra o que vai para a transmissão), mudo
+        // já em 48 kHz: acabamento, nivelador + limitador, medidor (mostra o que vai para a transmissão), mudo
         void Depois(float[] s, int n)
         {
+            Acab.Processar(s, n);
             Nivel2.Processar(s, n);
             float pe = 0, pd = 0; double se = 0, sd = 0;
             for (int i = 0; i + 1 < n; i += 2)
